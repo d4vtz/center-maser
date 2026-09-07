@@ -54,8 +54,7 @@ PlasmaCore.Dialog {
         var screen = screenForCursor(Workspace.cursorPos)
         if (!screen) return
 
-        var desktop = Workspace.currentDesktopForScreen(screen)
-        var area = Workspace.clientArea(KWin.WorkArea, screen, desktop)
+        var area = Workspace.clientArea(KWin.WorkArea, screen, Workspace.currentDesktop)
         if (area && area.width > 0 && area.height > 0) {
             workArea = Qt.rect(area.x, area.y, area.width, area.height)
         }
