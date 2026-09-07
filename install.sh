@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ID="org.d4vtz.centermaster"
+LEGACY_OVERLAY_ID="org.d4vtz.centermaster.overlay"
 ROOT="$(cd -- "$(dirname -- "$BASH_SOURCE")" && pwd)"
 DEST="$HOME/.local/share/kwin/scripts/$ID"
 
@@ -64,6 +65,14 @@ find_aurorae_theme_dir() {
     done
 
     return 1
+}
+
+remove_legacy_overlay() {
+    # v0.5 used a second declarative KWin package only for the drag overlay.
+    # v0.6 folds that UI into Center Master itself, so remove the old package
+    # and its enable flag to avoid loading duplicate overlays.
+    kwriteconfig6 --file kwinrc --group Plugins --delete "$LEGACY_OVERLAY_ID""Enabled" 2>/dev/null || true
+    kpackagetool6 --type=KWin/Script -r "$LEGACY_OVERLAY_ID" >/dev/null 2>&1 || true
 }
 
 install_center_master_script() {
@@ -169,6 +178,7 @@ install_accent_decoration() {
     echo "Borde agregado sobre '$base_name' conservando botones, barra de título y sombras."
 }
 
+remove_legacy_overlay
 install_center_master_script
 install_accent_decoration
 
