@@ -1,4 +1,4 @@
-# Center Master v0.2
+# Center Master v0.3
 
 KWin/Plasma 6 automatic tiling script with a stable centered master and two secondary stacks.
 
@@ -17,10 +17,67 @@ KWin/Plasma 6 automatic tiling script with a stable centered master and two seco
 - `Meta+Shift+H/J/K/L`: move between stacks / reorder vertically
 - `Meta+Return`: promote focused window to master
 - `Meta+Space`: toggle floating
-- `Meta+M`: toggle monocle for the current output + desktop
+- `Meta+M`: toggle monocle
 - `Meta+R`: reflow the current layout
 - `Meta+-` / `Meta+=`: shrink / grow master
 - `Meta+0`: reset master ratios
+- `Meta+Ctrl+K`: increase the focused secondary window weight
+- `Meta+Ctrl+J`: decrease the focused secondary window weight
+- `Meta+Ctrl+Backspace`: reset the focused secondary stack to equal weights
+
+## Weighted secondary stacks
+
+Secondary windows no longer have to use equal heights.
+
+For example:
+
+```text
+RIGHT
+
+A  weight 1.0
+B  weight 2.0
+C  weight 1.0
+```
+
+produces approximately:
+
+```text
+┌────────┐
+│   A    │ 25%
+├────────┤
+│        │
+│   B    │ 50%
+│        │
+├────────┤
+│   C    │ 25%
+└────────┘
+```
+
+Resizing transfers weight between the focused window and its nearest vertical neighbor, so the total stack height remains constant. `minStackWeight` prevents a window from collapsing to an unusable size.
+
+## Focus wrap
+
+`focusWrap` is disabled by default.
+
+When enabled:
+
+- Up from the first item of a secondary stack focuses the last item.
+- Down from the last item focuses the first item.
+- Left from LEFT wraps toward RIGHT (or MASTER if RIGHT is empty).
+- Right from RIGHT wraps toward LEFT (or MASTER if LEFT is empty).
+
+This affects focus only. Window movement does not wrap.
+
+## Insertion policies
+
+`insertionPolicy` controls where newly tiled windows are inserted:
+
+- `balanced`: default; fills the shorter stack and alternates on ties.
+- `right`: always inserts new secondary windows in RIGHT.
+- `left`: always inserts new secondary windows in LEFT.
+- `focused-stack`: uses the stack of the previously focused secondary window when possible, otherwise falls back to balanced.
+
+The first tiled window on an empty output + desktop always becomes MASTER.
 
 ## Monocle
 
@@ -34,7 +91,7 @@ When enabled, dragging a tiled window and releasing it reassigns it according to
 - center -> MASTER
 - right edge -> RIGHT stack
 
-The vertical release position chooses the insertion point inside a secondary stack. Dragging the master to a side promotes another tiled window so the workspace never loses its master.
+The vertical release position chooses the insertion point inside a secondary stack.
 
 ## Application rules
 
@@ -46,21 +103,22 @@ The graphical configuration page exposes three rule lists:
 
 Rules are matched against `resourceClass`, `resourceName`, and `desktopFileName`. Separate entries with commas, semicolons, or line breaks. A wildcard `*` can be used at the beginning and/or end.
 
-Structural KWin windows such as panels, desktop windows, popups, and other special windows remain ignored.
-
 ## Configuration
 
 System Settings -> Window Management -> KWin Scripts -> Center Master -> Configure exposes:
 
 - outer and inner gaps
 - smart gaps
-- dual-master and centered-master ratios
-- ratio resize step
+- master ratios
+- master resize step
+- weighted secondary resize step and minimum weight
+- optional focus wrap
+- insertion policy
 - drag/drop reassignment and edge-zone width
 - per-application rules
 - debug logging
 
-KWin stores these values in `kwinrc`. Reload Center Master after changing settings so the running script reads the new values.
+Reload Center Master after changing settings so the running script reads the new values.
 
 ## Install / update
 
@@ -69,7 +127,23 @@ git pull
 ./install.sh
 ```
 
-The installer replaces the local copy under `~/.local/share/kwin/scripts/org.d4vtz.centermaster`, enables the script, and asks KWin to reconfigure.
+## Tests
+
+The repository now contains a pure layout-core test suite for the v0.3 invariants:
+
+```bash
+node --test tests/*.test.mjs
+```
+
+GitHub Actions runs the same tests on pushes and pull requests.
+
+The suite currently covers:
+
+- balanced and explicit insertion policies
+- focused-stack insertion
+- weighted-height normalization
+- vertical weight transfer and minimum weight
+- optional focus wrapping
 
 ## Logs
 
@@ -77,7 +151,7 @@ The installer replaces the local copy under `~/.local/share/kwin/scripts/org.d4v
 journalctl --user -f | grep -i CenterMaster
 ```
 
-Debug logging is disabled by default and can be enabled from the configuration page.
+Debug logging is disabled by default.
 
 ## Current scope
 
@@ -85,9 +159,11 @@ Implemented:
 
 - state per output + virtual desktop
 - stable master
-- balanced left/right insertion
+- configurable insertion policy
 - keyboard navigation and movement
+- optional focus wrap
 - master promotion
+- weighted vertical secondary stacks
 - floating toggle with previous-slot restoration
 - minimized-window exclusion while preserving logical position
 - fullscreen bypass
@@ -99,8 +175,10 @@ Implemented:
 - per-application floating/ignored/tiled rules
 - graphical configuration UI
 - WorkArea-aware geometry
+- automated layout-core tests and CI
 
 Still intentionally deferred:
 
-- weighted vertical resize of secondary windows
+- visual drag/drop overlay
+- persistent per-desktop layout state across KWin restarts
 - alternate layouts such as dwindle or traditional master-stack
