@@ -1,4 +1,4 @@
-# Center Master v0.3
+# Center Master v0.4
 
 KWin/Plasma 6 automatic tiling script with a stable centered master and two secondary stacks.
 
@@ -185,3 +185,38 @@ Still intentionally deferred:
 - visual drag/drop overlay
 - persistent per-desktop layout state across KWin restarts
 - alternate layouts such as dwindle or traditional master-stack
+
+
+## Center Master Accent decoration
+
+v0.4 adds a companion Aurorae window decoration named `CenterMasterAccent`.
+
+The active window border follows KDE's accent color through the Plasma SVG role `ColorScheme-Highlight`. Inactive borders use the current text/foreground color at reduced opacity, and the decoration background follows `ColorScheme-Background`. The button glyphs also use color-scheme roles, so the decoration follows light/dark and accent changes instead of hardcoding a palette.
+
+Defaults:
+
+- active border: 2 px, accent/highlight color
+- inactive border: visually 1 px, subdued foreground color
+- title area: current KDE window background
+- title/buttons: current KDE foreground
+- no custom shadow; gaps remain responsible for visual separation
+
+`install.sh` installs the decoration under:
+
+```text
+~/.local/share/aurorae/themes/CenterMasterAccent
+```
+
+and applies it through KWin's `org.kde.kdecoration2` configuration. Before changing the decoration for the first time, the installer stores the previous decoration plugin and theme in:
+
+```text
+~/.config/center-master/decoration-backup.conf
+```
+
+To restore the previous window decoration:
+
+```bash
+bash restore-decoration.sh
+```
+
+The SVG border colors follow KDE's current color scheme automatically. Aurorae stores title text colors in its rc file rather than as an SVG color role, so `install.sh` synchronizes those title colors from `kdeglobals` when the decoration is installed.
