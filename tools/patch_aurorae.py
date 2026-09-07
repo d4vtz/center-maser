@@ -9,6 +9,7 @@ are replaced.
 
 from __future__ import annotations
 
+import argparse
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -98,12 +99,39 @@ def add_frame(root: ET.Element, prefix: str, x0: int, y0: int,
     rect(root, f"{prefix}-bottomright", x0 + span + t + 4,
          y0 + span + t + 4, t, t, css_class, opacity)
 
-def main() -> int:
-    if len(sys.argv) != 2:
-        print("uso: patch_aurorae.py /ruta/decoration.svg", file=sys.stderr)
-        return 2
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Añade bordes innerborder a una decoración Aurorae existente."
+    )
+    parser.add_argument("svg", type=Path, help="Ruta a decoration.svg")
+    parser.add_argument(
+        "--active-width",
+        type=int,
+        default=4,
+        help="Grosor del borde activo en píxeles SVG (predeterminado: 4)",
+    )
+    parser.add_argument(
+        "--inactive-width",
+        type=int,
+        default=2,
+        help="Grosor del borde inactivo en píxeles SVG (predeterminado: 2)",
+    )
+    parser.add_argument(
+        "--inactive-opacity",
+        type=float,
+        default=0.42,
+        help="Opacidad del borde inactivo entre 0 y 1 (predeterminado: 0.42)",
+    )
+    return parser.parse_args()
 
-    path = Path(sys.argv[1])
+
+def main() -> int:
+    args = parse_args()
+    path = args.svg
+
+    active_width = max(1, min(12, args.active_width))
+    inactive_width = max(0, min(12, args.inactive_width))
+    inactive_opacity = max(0.0, min(1.0, args.inactive_opacity))
 
     try:
         tree = ET.parse(path)
@@ -123,20 +151,21 @@ def main() -> int:
         "innerborder",
         10000,
         10000,
-        2,
+        active_width,
         "ColorScheme-Highlight",
         None,
     )
 
-    add_frame(
-        root,
-        "innerborder-inactive",
-        10100,
-        10000,
-        1,
-        "ColorScheme-Text",
-        0.42,
-    )
+    if inactive_width > 0:
+        add_frame(
+            root,
+            "innerborder-inactive",
+            10100,
+            10000,
+            inactive_width,
+            "ColorScheme-Text",
+            inactive_opacity,
+        )
 
     tree.write(path, encoding="utf-8", xml_declaration=True)
     return 0
