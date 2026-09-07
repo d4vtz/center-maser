@@ -283,3 +283,17 @@ The companion overlay reads mirrored settings. Because it is a separate KWin pac
 ```
 
 after changing overlay-specific appearance settings so the installer synchronizes them to the companion script.
+
+
+### Plasma-native zone visuals
+
+The drag overlay follows Plasma/Kirigami theme roles instead of hard-coded colors:
+
+- inactive zone surfaces use the current Plasma background and alternate background colors;
+- active zones use the current KDE/Plasma highlight color;
+- active text uses the theme highlighted-text color;
+- inactive outlines and labels follow the current theme text color at reduced alpha.
+
+LEFT and RIGHT also show slot previews derived from the windows currently occupying each side. The slot under the cursor receives the strongest highlight, while the JavaScript tiling engine remains responsible for the actual drop and insertion order.
+
+This keeps the overlay visually integrated with light, dark and custom Plasma color schemes without maintaining a separate palette.
