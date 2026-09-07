@@ -1,27 +1,45 @@
 "use strict";
 
 /*
- * Center Master v0.1
+ * Center Master v0.2
  * KWin / Plasma 6
- *
- * Design:
- *   1 window : master uses all work area minus outerGap
- *   2 windows: master 67%, secondary 33%
- *   3+       : left / master / right = 30 / 40 / 30 by default
  *
  * State is authoritative. Geometry is only a projection of state.
  */
 
+function readBool(key, fallback) {
+    const value = readConfig(key, fallback);
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") return value.toLowerCase() === "true";
+    return Boolean(value);
+}
+
+function parseRuleList(value) {
+    return String(value || "")
+        .split(/[,;\n]/)
+        .map(v => v.trim().toLowerCase())
+        .filter(v => v.length > 0);
+}
+
 const Config = {
     outerGap: Number(readConfig("outerGap", 8)),
     innerGap: Number(readConfig("innerGap", 8)),
-    smartGaps: Boolean(readConfig("smartGaps", false)),
+    smartGaps: readBool("smartGaps", false),
+
     dualMasterRatio: Number(readConfig("dualMasterRatio", 0.67)),
     centerMasterRatio: Number(readConfig("centerMasterRatio", 0.40)),
     minMasterRatio: Number(readConfig("minMasterRatio", 0.30)),
     maxMasterRatio: Number(readConfig("maxMasterRatio", 0.70)),
     ratioStep: Number(readConfig("ratioStep", 0.05)),
-    debug: Boolean(readConfig("debug", true))
+
+    enableDragReassign: readBool("enableDragReassign", true),
+    dropZoneRatio: Number(readConfig("dropZoneRatio", 0.30)),
+
+    floatingApps: parseRuleList(readConfig("floatingApps", "")),
+    ignoredApps: parseRuleList(readConfig("ignoredApps", "")),
+    tiledApps: parseRuleList(readConfig("tiledApps", "")),
+
+    debug: readBool("debug", false)
 };
 
 function log() {
@@ -72,6 +90,48 @@ function makeRect(x, y, width, height) {
     };
 }
 
+function globMatches(pattern, value) {
+    if (!pattern || !value) return false;
+
+    pattern = String(pattern).toLowerCase();
+    value = String(value).toLowerCase();
+
+    if (pattern === "*") return true;
+    if (pattern.indexOf("*") < 0) return pattern === value;
+
+    const starts = pattern.startsWith("*");
+    const ends = pattern.endsWith("*");
+    const core = pattern.replace(/^\*+|\*+$/g, "");
+
+    if (starts && ends) return value.indexOf(core) >= 0;
+    if (starts) return value.endsWith(core);
+    if (ends) return value.startsWith(core);
+
+    return pattern === value;
+}
+
+function windowAppIds(window) {
+    return [
+        window.resourceClass,
+        window.resourceName,
+        window.desktopFileName
+    ]
+        .filter(v => v !== undefined && v !== null && String(v).length > 0)
+        .map(v => String(v).toLowerCase());
+}
+
+function matchesAppRule(window, patterns) {
+    const ids = windowAppIds(window);
+
+    for (const pattern of patterns) {
+        for (const value of ids) {
+            if (globMatches(pattern, value)) return true;
+        }
+    }
+
+    return false;
+}
+
 class WorkspaceState {
     constructor(output, desktop) {
         this.output = output;
@@ -87,18 +147,29 @@ class WorkspaceState {
 
         this.dualMasterRatio = Config.dualMasterRatio;
         this.centerMasterRatio = Config.centerMasterRatio;
+
+        this.monocle = false;
     }
 
     tiledCount() {
         return (this.master ? 1 : 0) + this.left.length + this.right.length;
     }
 
+    allWindows() {
+        const windows = [];
+        if (this.master) windows.push(this.master);
+        return windows.concat(this.left, this.right);
+    }
+
     zoneOf(window) {
         if (this.master === window) return { zone: "master", index: 0 };
+
         let i = this.left.indexOf(window);
         if (i >= 0) return { zone: "left", index: i };
+
         i = this.right.indexOf(window);
         if (i >= 0) return { zone: "right", index: i };
+
         return null;
     }
 
@@ -111,14 +182,12 @@ class WorkspaceState {
         }
 
         if (preferredSlot && preferredSlot.zone === "left") {
-            const idx = clamp(preferredSlot.index, 0, this.left.length);
-            this.left.splice(idx, 0, window);
+            this.left.splice(clamp(preferredSlot.index, 0, this.left.length), 0, window);
             return;
         }
 
         if (preferredSlot && preferredSlot.zone === "right") {
-            const idx = clamp(preferredSlot.index, 0, this.right.length);
-            this.right.splice(idx, 0, window);
+            this.right.splice(clamp(preferredSlot.index, 0, this.right.length), 0, window);
             return;
         }
 
@@ -137,7 +206,8 @@ class WorkspaceState {
     }
 
     focus(window) {
-        if (!window) return;
+        if (!window || !this.zoneOf(window)) return;
+
         this.focused = window;
         removeFromArray(this.focusHistory, window);
         this.focusHistory.push(window);
@@ -146,10 +216,11 @@ class WorkspaceState {
 
     chooseReplacementMaster() {
         for (let i = this.focusHistory.length - 1; i >= 0; --i) {
-            const w = this.focusHistory[i];
-            const z = this.zoneOf(w);
-            if (z && z.zone !== "master") return w;
+            const window = this.focusHistory[i];
+            const slot = this.zoneOf(window);
+            if (slot && slot.zone !== "master") return window;
         }
+
         if (this.right.length) return this.right[0];
         if (this.left.length) return this.left[0];
         return null;
@@ -166,6 +237,7 @@ class WorkspaceState {
             this.left.splice(slot.index, 1);
             return slot;
         }
+
         if (slot.zone === "right") {
             this.right.splice(slot.index, 1);
             return slot;
@@ -173,12 +245,14 @@ class WorkspaceState {
 
         const replacement = this.chooseReplacementMaster();
         this.master = null;
+
         if (replacement) {
-            const rslot = this.zoneOf(replacement);
-            if (rslot.zone === "left") this.left.splice(rslot.index, 1);
-            if (rslot.zone === "right") this.right.splice(rslot.index, 1);
+            const replacementSlot = this.zoneOf(replacement);
+            if (replacementSlot.zone === "left") this.left.splice(replacementSlot.index, 1);
+            if (replacementSlot.zone === "right") this.right.splice(replacementSlot.index, 1);
             this.master = replacement;
         }
+
         return slot;
     }
 
@@ -188,17 +262,21 @@ class WorkspaceState {
 
         const oldMaster = this.master;
         this.master = window;
+
         if (slot.zone === "left") this.left[slot.index] = oldMaster;
         if (slot.zone === "right") this.right[slot.index] = oldMaster;
+
         return true;
     }
 
     moveUp(window) {
         const slot = this.zoneOf(window);
         if (!slot || slot.zone === "master" || slot.index <= 0) return false;
+
         const stack = slot.zone === "left" ? this.left : this.right;
         const target = slot.index - 1;
         const other = stack[target];
+
         stack[target] = window;
         stack[slot.index] = other;
         return true;
@@ -207,10 +285,13 @@ class WorkspaceState {
     moveDown(window) {
         const slot = this.zoneOf(window);
         if (!slot || slot.zone === "master") return false;
+
         const stack = slot.zone === "left" ? this.left : this.right;
         if (slot.index >= stack.length - 1) return false;
+
         const target = slot.index + 1;
         const other = stack[target];
+
         stack[target] = window;
         stack[slot.index] = other;
         return true;
@@ -219,6 +300,7 @@ class WorkspaceState {
     moveLeft(window) {
         const slot = this.zoneOf(window);
         if (!slot || slot.zone !== "right") return false;
+
         this.right.splice(slot.index, 1);
         this.left.push(window);
         return true;
@@ -227,9 +309,71 @@ class WorkspaceState {
     moveRight(window) {
         const slot = this.zoneOf(window);
         if (!slot || slot.zone !== "left") return false;
+
         this.left.splice(slot.index, 1);
         this.right.push(window);
         return true;
+    }
+
+    insertIntoStack(window, zone, index) {
+        const current = this.zoneOf(window);
+        if (!current || current.zone === "master") return false;
+
+        if (current.zone === "left") this.left.splice(current.index, 1);
+        if (current.zone === "right") this.right.splice(current.index, 1);
+
+        const stack = zone === "left" ? this.left : this.right;
+        stack.splice(clamp(index, 0, stack.length), 0, window);
+
+        return true;
+    }
+
+    moveMasterToZone(zone, index) {
+        if (!this.master || (zone !== "left" && zone !== "right")) return false;
+
+        const oldMaster = this.master;
+        const destination = zone === "left" ? this.left : this.right;
+        const opposite = zone === "left" ? this.right : this.left;
+
+        let replacement = null;
+
+        if (destination.length) {
+            replacement = destination[clamp(index, 0, destination.length - 1)];
+        } else if (opposite.length) {
+            replacement = opposite[0];
+        }
+
+        if (!replacement) return false;
+
+        this.promote(replacement);
+
+        const oldSlot = this.zoneOf(oldMaster);
+        if (!oldSlot || oldSlot.zone === "master") return false;
+
+        const oldStack = oldSlot.zone === "left" ? this.left : this.right;
+        oldStack.splice(oldSlot.index, 1);
+
+        const targetStack = zone === "left" ? this.left : this.right;
+        targetStack.splice(clamp(index, 0, targetStack.length), 0, oldMaster);
+
+        return true;
+    }
+
+    moveToZone(window, zone, index) {
+        const slot = this.zoneOf(window);
+        if (!slot) return false;
+
+        if (zone === "master") {
+            return slot.zone === "master" ? false : this.promote(window);
+        }
+
+        if (zone !== "left" && zone !== "right") return false;
+
+        if (slot.zone === "master") {
+            return this.moveMasterToZone(zone, index);
+        }
+
+        return this.insertIntoStack(window, zone, index);
     }
 
     resizeMaster(delta) {
@@ -248,6 +392,7 @@ class WorkspaceState {
                 Config.maxMasterRatio
             );
         }
+
         return true;
     }
 
@@ -256,21 +401,28 @@ class WorkspaceState {
         this.centerMasterRatio = Config.centerMasterRatio;
     }
 
+    toggleMonocle() {
+        this.monocle = !this.monocle;
+        return this.monocle;
+    }
+
     validate() {
         const seen = [];
-        const push = (w, where) => {
-            if (!w) throw new Error("Null window in " + where);
-            if (contains(seen, w)) throw new Error("Duplicate window in " + where);
-            seen.push(w);
+
+        const push = (window, where) => {
+            if (!window) throw new Error("Null window in " + where);
+            if (contains(seen, window)) throw new Error("Duplicate window in " + where);
+            seen.push(window);
         };
 
         if (this.master) push(this.master, "master");
-        for (const w of this.left) push(w, "left");
-        for (const w of this.right) push(w, "right");
+        for (const window of this.left) push(window, "left");
+        for (const window of this.right) push(window, "right");
 
         if ((this.left.length || this.right.length) && !this.master) {
             throw new Error("Secondary windows exist without master");
         }
+
         return true;
     }
 }
@@ -281,33 +433,50 @@ class ManagedWindow {
         this.mode = "tiled";
         this.previousSlot = null;
         this.workspaceKey = null;
+
         this.userMoving = false;
         this.userResizing = false;
         this.lastAppliedGeometry = null;
     }
 }
 
+function insetWorkArea(workArea, effectiveCount) {
+    const outer = (Config.smartGaps && effectiveCount === 1)
+        ? 0
+        : Config.outerGap;
+
+    return {
+        x: workArea.x + outer,
+        y: workArea.y + outer,
+        width: Math.max(1, workArea.width - outer * 2),
+        height: Math.max(1, workArea.height - outer * 2)
+    };
+}
+
 function calculateStackRects(windows, area, gap) {
     const result = [];
-    const n = windows.length;
-    if (!n) return result;
+    const count = windows.length;
+    if (!count) return result;
 
-    const totalGap = gap * Math.max(0, n - 1);
+    const totalGap = gap * Math.max(0, count - 1);
     const available = Math.max(1, area.height - totalGap);
-    const unit = available / n;
+    const height = available / count;
 
     let y = area.y;
-    for (let i = 0; i < n; ++i) {
-        const nextY = (i === n - 1)
-            ? area.y + area.height
-            : area.y + (i + 1) * unit + i * gap;
-        const height = (i === n - 1)
-            ? area.y + area.height - y
-            : unit;
 
-        result.push({ window: windows[i], rect: makeRect(area.x, y, area.width, height) });
-        y = nextY + (i === n - 1 ? 0 : gap);
+    for (let i = 0; i < count; ++i) {
+        const h = i === count - 1
+            ? area.y + area.height - y
+            : height;
+
+        result.push({
+            window: windows[i],
+            rect: makeRect(area.x, y, area.width, h)
+        });
+
+        y += height + gap;
     }
+
     return result;
 }
 
@@ -315,17 +484,14 @@ function calculateLayout(state, workArea) {
     const count = state.tiledCount();
     if (!count || !state.master) return [];
 
-    const outer = (Config.smartGaps && count === 1) ? 0 : Config.outerGap;
     const inner = Config.innerGap;
-    const area = {
-        x: workArea.x + outer,
-        y: workArea.y + outer,
-        width: Math.max(1, workArea.width - outer * 2),
-        height: Math.max(1, workArea.height - outer * 2)
-    };
+    const area = insetWorkArea(workArea, count);
 
     if (count === 1) {
-        return [{ window: state.master, rect: makeRect(area.x, area.y, area.width, area.height) }];
+        return [{
+            window: state.master,
+            rect: makeRect(area.x, area.y, area.width, area.height)
+        }];
     }
 
     const hasLeft = state.left.length > 0;
@@ -333,45 +499,95 @@ function calculateLayout(state, workArea) {
 
     if (!(hasLeft && hasRight)) {
         const sideWindows = hasLeft ? state.left : state.right;
-        const masterRatio = state.dualMasterRatio;
-        const sideRatio = 1 - masterRatio;
         const contentWidth = area.width - inner;
 
-        const masterWidth = contentWidth * masterRatio;
-        const sideWidth = contentWidth * sideRatio;
+        const masterWidth = contentWidth * state.dualMasterRatio;
+        const sideWidth = contentWidth - masterWidth;
 
-        let masterArea, sideArea;
+        let masterArea;
+        let sideArea;
+
         if (hasLeft) {
-            sideArea = { x: area.x, y: area.y, width: sideWidth, height: area.height };
-            masterArea = { x: area.x + sideWidth + inner, y: area.y, width: masterWidth, height: area.height };
+            sideArea = {
+                x: area.x,
+                y: area.y,
+                width: sideWidth,
+                height: area.height
+            };
+
+            masterArea = {
+                x: area.x + sideWidth + inner,
+                y: area.y,
+                width: masterWidth,
+                height: area.height
+            };
         } else {
-            masterArea = { x: area.x, y: area.y, width: masterWidth, height: area.height };
-            sideArea = { x: area.x + masterWidth + inner, y: area.y, width: sideWidth, height: area.height };
+            masterArea = {
+                x: area.x,
+                y: area.y,
+                width: masterWidth,
+                height: area.height
+            };
+
+            sideArea = {
+                x: area.x + masterWidth + inner,
+                y: area.y,
+                width: sideWidth,
+                height: area.height
+            };
         }
 
         return [
-            { window: state.master, rect: makeRect(masterArea.x, masterArea.y, masterArea.width, masterArea.height) },
+            {
+                window: state.master,
+                rect: makeRect(masterArea.x, masterArea.y, masterArea.width, masterArea.height)
+            },
             ...calculateStackRects(sideWindows, sideArea, inner)
         ];
     }
 
-    const masterRatio = state.centerMasterRatio;
-    const sideRatio = (1 - masterRatio) / 2;
     const contentWidth = area.width - inner * 2;
+    const masterWidth = contentWidth * state.centerMasterRatio;
+    const sideWidth = (contentWidth - masterWidth) / 2;
 
-    const leftWidth = contentWidth * sideRatio;
-    const masterWidth = contentWidth * masterRatio;
-    const rightWidth = contentWidth - leftWidth - masterWidth;
+    const leftArea = {
+        x: area.x,
+        y: area.y,
+        width: sideWidth,
+        height: area.height
+    };
 
-    const leftArea = { x: area.x, y: area.y, width: leftWidth, height: area.height };
-    const masterArea = { x: area.x + leftWidth + inner, y: area.y, width: masterWidth, height: area.height };
-    const rightArea = { x: masterArea.x + masterWidth + inner, y: area.y, width: rightWidth, height: area.height };
+    const masterArea = {
+        x: area.x + sideWidth + inner,
+        y: area.y,
+        width: masterWidth,
+        height: area.height
+    };
+
+    const rightArea = {
+        x: masterArea.x + masterWidth + inner,
+        y: area.y,
+        width: sideWidth,
+        height: area.height
+    };
 
     return [
         ...calculateStackRects(state.left, leftArea, inner),
-        { window: state.master, rect: makeRect(masterArea.x, masterArea.y, masterArea.width, masterArea.height) },
+        {
+            window: state.master,
+            rect: makeRect(masterArea.x, masterArea.y, masterArea.width, masterArea.height)
+        },
         ...calculateStackRects(state.right, rightArea, inner)
     ];
+}
+
+function calculateMonocleLayout(windows, workArea) {
+    if (!windows.length) return [];
+
+    const area = insetWorkArea(workArea, 1);
+    const rect = makeRect(area.x, area.y, area.width, area.height);
+
+    return windows.map(window => ({ window, rect }));
 }
 
 class Controller {
@@ -381,31 +597,57 @@ class Controller {
         this.applyingLayout = false;
     }
 
-    windowKey(window) { return idOf(window); }
-    stateKey(output, desktop) { return outputId(output) + "::" + desktopId(desktop); }
+    windowKey(window) {
+        return idOf(window);
+    }
+
+    stateKey(output, desktop) {
+        return outputId(output) + "::" + desktopId(desktop);
+    }
 
     currentDesktopFor(window) {
-        if (window.desktops && window.desktops.length > 0) return window.desktops[0];
+        if (window.desktops && window.desktops.length > 0) {
+            return window.desktops[0];
+        }
         return null;
     }
 
     stateFor(window, create) {
         const output = window.output;
         const desktop = this.currentDesktopFor(window);
+
         if (!output || !desktop) return null;
 
         const key = this.stateKey(output, desktop);
-        if (!this.states.has(key) && create) this.states.set(key, new WorkspaceState(output, desktop));
+
+        if (!this.states.has(key) && create) {
+            this.states.set(key, new WorkspaceState(output, desktop));
+        }
+
         return this.states.get(key) || null;
     }
 
     classify(window) {
         if (!window) return "ignored";
         if (!window.managed || window.deleted) return "ignored";
-        if (window.desktopWindow || window.dock || window.specialWindow || window.popupWindow) return "ignored";
+
+        if (
+            window.desktopWindow ||
+            window.dock ||
+            window.specialWindow ||
+            window.popupWindow
+        ) {
+            return "ignored";
+        }
+
+        if (matchesAppRule(window, Config.ignoredApps)) return "ignored";
+        if (matchesAppRule(window, Config.tiledApps)) return "tiled";
+        if (matchesAppRule(window, Config.floatingApps)) return "floating";
+
         if (window.skipTaskbar && window.skipPager) return "ignored";
         if (window.desktops && window.desktops.length === 0) return "floating";
         if (window.transient || window.modal) return "floating";
+
         return "tiled";
     }
 
@@ -414,33 +656,57 @@ class Controller {
 
         if (window.minimizedChanged) {
             window.minimizedChanged.connect(() => {
-                const m = this.managed.get(key);
-                if (!m || m.mode !== "tiled") return;
+                const managed = this.managed.get(key);
+                if (!managed || managed.mode !== "tiled") return;
                 this.relayoutForWindow(window);
             });
         }
-        if (window.fullScreenChanged) window.fullScreenChanged.connect(() => this.relayoutForWindow(window));
-        if (window.outputChanged) window.outputChanged.connect(() => this.rehomeWindow(window));
-        if (window.desktopsChanged) window.desktopsChanged.connect(() => this.rehomeWindow(window));
+
+        if (window.fullScreenChanged) {
+            window.fullScreenChanged.connect(() => this.relayoutForWindow(window));
+        }
+
+        if (window.outputChanged) {
+            window.outputChanged.connect(() => this.rehomeWindow(window));
+        }
+
+        if (window.desktopsChanged) {
+            window.desktopsChanged.connect(() => this.rehomeWindow(window));
+        }
 
         if (window.interactiveMoveResizeStarted) {
             window.interactiveMoveResizeStarted.connect(() => {
-                const m = this.managed.get(key);
-                if (!m) return;
-                m.userMoving = Boolean(window.move);
-                m.userResizing = Boolean(window.resize);
+                const managed = this.managed.get(key);
+                if (!managed) return;
+
+                managed.userMoving = Boolean(window.move);
+                managed.userResizing = Boolean(window.resize);
             });
         }
 
         if (window.interactiveMoveResizeFinished) {
             window.interactiveMoveResizeFinished.connect(() => {
-                const m = this.managed.get(key);
-                if (!m) return;
-                const wasMoving = m.userMoving;
-                const wasResizing = m.userResizing;
-                m.userMoving = false;
-                m.userResizing = false;
-                if (wasMoving || wasResizing) this.relayoutForWindow(window);
+                const managed = this.managed.get(key);
+                if (!managed) return;
+
+                const wasMoving = managed.userMoving;
+                const wasResizing = managed.userResizing;
+
+                managed.userMoving = false;
+                managed.userResizing = false;
+
+                if (
+                    wasMoving &&
+                    Config.enableDragReassign &&
+                    managed.mode === "tiled"
+                ) {
+                    this.handleDrop(window);
+                    return;
+                }
+
+                if (wasMoving || wasResizing) {
+                    this.relayoutForWindow(window);
+                }
             });
         }
     }
@@ -451,12 +717,17 @@ class Controller {
 
         const managed = new ManagedWindow(window);
         managed.mode = this.classify(window);
+
         this.managed.set(key, managed);
         this.attachSignals(window);
 
-        if (managed.mode !== "tiled") return;
+        if (managed.mode !== "tiled") {
+            log("add", key, "mode=", managed.mode);
+            return;
+        }
 
         const state = this.stateFor(window, true);
+
         if (!state) {
             managed.mode = "floating";
             return;
@@ -465,22 +736,29 @@ class Controller {
         state.add(window);
         state.focus(window);
         state.validate();
+
         managed.workspaceKey = this.stateKey(state.output, state.desktop);
+
         this.relayout(state);
     }
 
     removeWindow(window) {
         const key = this.windowKey(window);
         const managed = this.managed.get(key);
+
         if (!managed) return;
 
         if (managed.mode === "tiled" && managed.workspaceKey) {
             const state = this.states.get(managed.workspaceKey);
+
             if (state) {
                 state.remove(window);
                 state.validate();
                 this.relayout(state);
-                if (state.tiledCount() === 0) this.states.delete(managed.workspaceKey);
+
+                if (state.tiledCount() === 0) {
+                    this.states.delete(managed.workspaceKey);
+                }
             }
         }
 
@@ -488,13 +766,13 @@ class Controller {
     }
 
     rehomeWindow(window) {
-        const key = this.windowKey(window);
-        const managed = this.managed.get(key);
+        const managed = this.managed.get(this.windowKey(window));
         if (!managed || managed.mode !== "tiled") return;
 
         const oldKey = managed.workspaceKey;
         const oldState = oldKey ? this.states.get(oldKey) : null;
         const newState = this.stateFor(window, true);
+
         if (!newState) return;
 
         const newKey = this.stateKey(newState.output, newState.desktop);
@@ -504,73 +782,125 @@ class Controller {
             oldState.remove(window);
             oldState.validate();
             this.relayout(oldState);
-            if (oldState.tiledCount() === 0) this.states.delete(oldKey);
+
+            if (oldState.tiledCount() === 0) {
+                this.states.delete(oldKey);
+            }
         }
 
         newState.add(window);
         newState.focus(window);
         newState.validate();
+
         managed.workspaceKey = newKey;
         this.relayout(newState);
     }
 
     onActivated(window) {
         if (!window) return;
+
         const managed = this.managed.get(this.windowKey(window));
         if (!managed || managed.mode !== "tiled") return;
-        const state = managed.workspaceKey ? this.states.get(managed.workspaceKey) : null;
+
+        const state = managed.workspaceKey
+            ? this.states.get(managed.workspaceKey)
+            : null;
+
         if (state) state.focus(window);
     }
 
     activeContext() {
         const window = workspace.activeWindow;
         if (!window) return null;
+
         const managed = this.managed.get(this.windowKey(window));
         if (!managed || managed.mode !== "tiled") return null;
-        const state = managed.workspaceKey ? this.states.get(managed.workspaceKey) : null;
+
+        const state = managed.workspaceKey
+            ? this.states.get(managed.workspaceKey)
+            : null;
+
         if (!state) return null;
+
         return { window, managed, state };
     }
 
     relayoutForWindow(window) {
         const managed = this.managed.get(this.windowKey(window));
+
         if (!managed || !managed.workspaceKey) return;
+
         const state = this.states.get(managed.workspaceKey);
         if (state) this.relayout(state);
+    }
+
+    visibleWindows(state) {
+        return state.allWindows().filter(window => {
+            const managed = this.managed.get(this.windowKey(window));
+
+            return managed &&
+                managed.mode === "tiled" &&
+                !window.minimized &&
+                !window.fullScreen;
+        });
     }
 
     relayout(state) {
         if (!state || !state.master) return;
 
-        const area = workspace.clientArea(KWin.WorkArea, state.output, state.desktop);
-        const visibleState = new WorkspaceState(state.output, state.desktop);
-        const visible = w => {
-            const m = this.managed.get(this.windowKey(w));
-            return m && m.mode === "tiled" && !w.minimized && !w.fullScreen;
-        };
+        const area = workspace.clientArea(
+            KWin.WorkArea,
+            state.output,
+            state.desktop
+        );
 
-        if (state.master && visible(state.master)) visibleState.master = state.master;
-        else {
-            const candidates = state.left.concat(state.right).filter(visible);
-            if (candidates.length) visibleState.master = candidates[0];
+        const visible = this.visibleWindows(state);
+        if (!visible.length) return;
+
+        let layout;
+
+        if (state.monocle) {
+            layout = calculateMonocleLayout(visible, area);
+        } else {
+            const visibleState = new WorkspaceState(state.output, state.desktop);
+
+            visibleState.master =
+                visible.indexOf(state.master) >= 0
+                    ? state.master
+                    : visible[0];
+
+            visibleState.left = state.left.filter(
+                window =>
+                    visible.indexOf(window) >= 0 &&
+                    window !== visibleState.master
+            );
+
+            visibleState.right = state.right.filter(
+                window =>
+                    visible.indexOf(window) >= 0 &&
+                    window !== visibleState.master
+            );
+
+            visibleState.dualMasterRatio = state.dualMasterRatio;
+            visibleState.centerMasterRatio = state.centerMasterRatio;
+
+            layout = calculateLayout(visibleState, area);
         }
 
-        if (!visibleState.master) return;
-
-        visibleState.left = state.left.filter(w => visible(w) && w !== visibleState.master);
-        visibleState.right = state.right.filter(w => visible(w) && w !== visibleState.master);
-        visibleState.dualMasterRatio = state.dualMasterRatio;
-        visibleState.centerMasterRatio = state.centerMasterRatio;
-
-        const layout = calculateLayout(visibleState, area);
-
         this.applyingLayout = true;
+
         try {
             for (const item of layout) {
-                const m = this.managed.get(this.windowKey(item.window));
-                if (!m || m.userMoving || m.userResizing) continue;
+                const managed = this.managed.get(
+                    this.windowKey(item.window)
+                );
+
+                if (!managed || managed.userMoving || managed.userResizing) {
+                    continue;
+                }
+
                 item.window.frameGeometry = item.rect;
-                m.lastAppliedGeometry = item.rect;
+                managed.lastAppliedGeometry = item.rect;
             }
         } finally {
             this.applyingLayout = false;
@@ -578,101 +908,269 @@ class Controller {
     }
 
     closestVertical(reference, candidates) {
-        const cy = reference.frameGeometry.y + reference.frameGeometry.height / 2;
+        const centerY =
+            reference.frameGeometry.y +
+            reference.frameGeometry.height / 2;
+
         let best = null;
         let bestDistance = Infinity;
-        for (const w of candidates) {
-            if (w.minimized) continue;
-            const wy = w.frameGeometry.y + w.frameGeometry.height / 2;
-            const d = Math.abs(wy - cy);
-            if (d < bestDistance) {
-                best = w;
-                bestDistance = d;
+
+        for (const window of candidates) {
+            if (window.minimized) continue;
+
+            const windowCenterY =
+                window.frameGeometry.y +
+                window.frameGeometry.height / 2;
+
+            const distance = Math.abs(windowCenterY - centerY);
+
+            if (distance < bestDistance) {
+                best = window;
+                bestDistance = distance;
             }
         }
+
         return best;
     }
 
     focusLeft() {
         const c = this.activeContext();
         if (!c) return;
-        const z = c.state.zoneOf(c.window);
+
+        const slot = c.state.zoneOf(c.window);
         let target = null;
-        if (z.zone === "master" && c.state.left.length) target = this.closestVertical(c.window, c.state.left);
-        if (z.zone === "right") target = c.state.master;
+
+        if (slot.zone === "master" && c.state.left.length) {
+            target = this.closestVertical(c.window, c.state.left);
+        }
+
+        if (slot.zone === "right") target = c.state.master;
+
         if (target) workspace.activeWindow = target;
     }
 
     focusRight() {
         const c = this.activeContext();
         if (!c) return;
-        const z = c.state.zoneOf(c.window);
+
+        const slot = c.state.zoneOf(c.window);
         let target = null;
-        if (z.zone === "master" && c.state.right.length) target = this.closestVertical(c.window, c.state.right);
-        if (z.zone === "left") target = c.state.master;
+
+        if (slot.zone === "master" && c.state.right.length) {
+            target = this.closestVertical(c.window, c.state.right);
+        }
+
+        if (slot.zone === "left") target = c.state.master;
+
         if (target) workspace.activeWindow = target;
     }
 
     focusUp() {
         const c = this.activeContext();
         if (!c) return;
-        const z = c.state.zoneOf(c.window);
-        if (z.zone === "master") return;
-        const stack = z.zone === "left" ? c.state.left : c.state.right;
-        if (z.index > 0) workspace.activeWindow = stack[z.index - 1];
+
+        const slot = c.state.zoneOf(c.window);
+        if (slot.zone === "master") return;
+
+        const stack =
+            slot.zone === "left"
+                ? c.state.left
+                : c.state.right;
+
+        if (slot.index > 0) {
+            workspace.activeWindow = stack[slot.index - 1];
+        }
     }
 
     focusDown() {
         const c = this.activeContext();
         if (!c) return;
-        const z = c.state.zoneOf(c.window);
-        if (z.zone === "master") return;
-        const stack = z.zone === "left" ? c.state.left : c.state.right;
-        if (z.index < stack.length - 1) workspace.activeWindow = stack[z.index + 1];
+
+        const slot = c.state.zoneOf(c.window);
+        if (slot.zone === "master") return;
+
+        const stack =
+            slot.zone === "left"
+                ? c.state.left
+                : c.state.right;
+
+        if (slot.index < stack.length - 1) {
+            workspace.activeWindow = stack[slot.index + 1];
+        }
     }
 
     mutateActive(mutator) {
         const c = this.activeContext();
         if (!c) return;
+
         if (mutator(c.state, c.window)) {
             c.state.validate();
             this.relayout(c.state);
+
             workspace.activeWindow = c.window;
             c.state.focus(c.window);
         }
     }
 
-    promoteActive() { this.mutateActive((s, w) => s.promote(w)); }
-    moveLeft() { this.mutateActive((s, w) => s.moveLeft(w)); }
-    moveRight() { this.mutateActive((s, w) => s.moveRight(w)); }
-    moveUp() { this.mutateActive((s, w) => s.moveUp(w)); }
-    moveDown() { this.mutateActive((s, w) => s.moveDown(w)); }
-    resizeMaster(delta) { this.mutateActive((s) => s.resizeMaster(delta)); }
+    promoteActive() {
+        this.mutateActive((state, window) => state.promote(window));
+    }
+
+    moveLeft() {
+        this.mutateActive((state, window) => state.moveLeft(window));
+    }
+
+    moveRight() {
+        this.mutateActive((state, window) => state.moveRight(window));
+    }
+
+    moveUp() {
+        this.mutateActive((state, window) => state.moveUp(window));
+    }
+
+    moveDown() {
+        this.mutateActive((state, window) => state.moveDown(window));
+    }
+
+    resizeMaster(delta) {
+        this.mutateActive(state => state.resizeMaster(delta));
+    }
 
     resetRatios() {
         const c = this.activeContext();
         if (!c) return;
+
         c.state.resetRatios();
         this.relayout(c.state);
+
         workspace.activeWindow = c.window;
+        c.state.focus(c.window);
+    }
+
+    toggleMonocle() {
+        const c = this.activeContext();
+        if (!c) return;
+
+        c.state.toggleMonocle();
+        this.relayout(c.state);
+
+        workspace.activeWindow = c.window;
+        c.state.focus(c.window);
+    }
+
+    reflowActive() {
+        const c = this.activeContext();
+        if (!c) return;
+
+        c.state.validate();
+        this.relayout(c.state);
+
+        workspace.activeWindow = c.window;
+        c.state.focus(c.window);
+    }
+
+    stackIndexForDrop(stack, centerY, area) {
+        if (!stack.length) return 0;
+
+        const relativeY = clamp(
+            (centerY - area.y) / Math.max(1, area.height),
+            0,
+            0.999999
+        );
+
+        return clamp(
+            Math.floor(relativeY * (stack.length + 1)),
+            0,
+            stack.length
+        );
+    }
+
+    handleDrop(window) {
+        const managed = this.managed.get(this.windowKey(window));
+
+        if (
+            !managed ||
+            managed.mode !== "tiled" ||
+            !managed.workspaceKey
+        ) {
+            return;
+        }
+
+        const state = this.states.get(managed.workspaceKey);
+        if (!state) return;
+
+        const area = workspace.clientArea(
+            KWin.WorkArea,
+            state.output,
+            state.desktop
+        );
+
+        const geometry = window.frameGeometry;
+
+        const centerX = geometry.x + geometry.width / 2;
+        const centerY = geometry.y + geometry.height / 2;
+
+        const relativeX = clamp(
+            (centerX - area.x) / Math.max(1, area.width),
+            0,
+            1
+        );
+
+        const edge = clamp(Config.dropZoneRatio, 0.15, 0.45);
+
+        let zone = "master";
+
+        if (relativeX < edge) zone = "left";
+        else if (relativeX > 1 - edge) zone = "right";
+
+        let index = 0;
+
+        if (zone === "left") {
+            index = this.stackIndexForDrop(
+                state.left.filter(w => w !== window),
+                centerY,
+                area
+            );
+        } else if (zone === "right") {
+            index = this.stackIndexForDrop(
+                state.right.filter(w => w !== window),
+                centerY,
+                area
+            );
+        }
+
+        if (state.moveToZone(window, zone, index)) {
+            state.validate();
+            state.focus(window);
+        }
+
+        this.relayout(state);
+        workspace.activeWindow = window;
     }
 
     toggleFloating() {
         const window = workspace.activeWindow;
         if (!window) return;
 
-        const key = this.windowKey(window);
-        const managed = this.managed.get(key);
+        const managed = this.managed.get(this.windowKey(window));
+
         if (!managed || managed.mode === "ignored") return;
 
         if (managed.mode === "tiled") {
-            const state = managed.workspaceKey ? this.states.get(managed.workspaceKey) : null;
+            const state = managed.workspaceKey
+                ? this.states.get(managed.workspaceKey)
+                : null;
+
             if (!state) return;
+
             managed.previousSlot = state.zoneOf(window);
+
             state.remove(window);
             state.validate();
+
             managed.mode = "floating";
             managed.workspaceKey = null;
+
             this.relayout(state);
             workspace.activeWindow = window;
             return;
@@ -681,12 +1179,20 @@ class Controller {
         if (managed.mode === "floating") {
             const state = this.stateFor(window, true);
             if (!state) return;
+
             managed.mode = "tiled";
+
             state.add(window, managed.previousSlot);
             state.focus(window);
             state.validate();
-            managed.workspaceKey = this.stateKey(state.output, state.desktop);
+
+            managed.workspaceKey = this.stateKey(
+                state.output,
+                state.desktop
+            );
+
             managed.previousSlot = null;
+
             this.relayout(state);
             workspace.activeWindow = window;
         }
@@ -708,6 +1214,8 @@ function registerShortcuts() {
 
     registerShortcut("CenterMasterPromote", "Center Master: Promote to master", "Meta+Return", () => controller.promoteActive());
     registerShortcut("CenterMasterFloat", "Center Master: Toggle floating", "Meta+Space", () => controller.toggleFloating());
+    registerShortcut("CenterMasterMonocle", "Center Master: Toggle monocle", "Meta+M", () => controller.toggleMonocle());
+    registerShortcut("CenterMasterReflow", "Center Master: Reflow current layout", "Meta+R", () => controller.reflowActive());
 
     registerShortcut("CenterMasterShrink", "Center Master: Shrink master", "Meta+-", () => controller.resizeMaster(-Config.ratioStep));
     registerShortcut("CenterMasterGrow", "Center Master: Grow master", "Meta+=", () => controller.resizeMaster(Config.ratioStep));
@@ -731,12 +1239,23 @@ function bootstrap() {
 
     if (workspace.screensChanged) {
         workspace.screensChanged.connect(() => {
-            for (const state of controller.states.values()) controller.relayout(state);
+            for (const state of controller.states.values()) {
+                controller.relayout(state);
+            }
         });
     }
 
-    for (const window of workspace.stackingOrder) controller.addWindow(window);
-    log("started", "states=", controller.states.size, "windows=", controller.managed.size);
+    for (const window of workspace.stackingOrder) {
+        controller.addWindow(window);
+    }
+
+    log(
+        "started",
+        "states=",
+        controller.states.size,
+        "windows=",
+        controller.managed.size
+    );
 }
 
 bootstrap();
