@@ -350,7 +350,7 @@ Item {
 
             Rectangle {
                 anchors.fill: parent
-                color: root.alphaColor(Kirigami.Theme.backgroundColor, 0.08)
+                color: root.alphaColor(Kirigami.Theme.backgroundColor, 0.02)
             }
 
             Rectangle {
@@ -362,39 +362,26 @@ Item {
                 radius: root.cornerRadius
                 color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "left" ? root.activeOpacity : root.inactiveOpacity)
+                    root.activeZone === "left" ? root.activeOpacity : Math.min(root.inactiveOpacity, 0.045))
                 border.color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "left" ? 1.0 : 0.52)
+                    root.activeZone === "left" ? 1.0 : 0.24)
                 border.width: root.activeZone === "left" ? 3 : 1
 
                 Behavior on color { ColorAnimation { duration: 110 } }
 
-                Item {
-                    anchors.fill: parent
+                Rectangle {
+                    visible: root.activeZone === "left" && root.activeSlot >= 0
+                    anchors.left: parent.left
+                    anchors.right: parent.right
                     anchors.margins: 8
-
-                    Repeater {
-                        model: Math.max(1, root.leftWindowCount + 1)
-
-                        Rectangle {
-                            required property int index
-                            readonly property int count: Math.max(1, root.leftWindowCount + 1)
-
-                            x: 0
-                            y: index * (parent.height / count) + 2
-                            width: parent.width
-                            height: Math.max(1, parent.height / count - 4)
-                            radius: Math.max(4, root.cornerRadius - 4)
-                            color: root.alphaColor(
-                                Kirigami.Theme.highlightColor,
-                                root.activeZone === "left" && root.activeSlot === index ? 0.36 : 0.06)
-                            border.color: root.alphaColor(
-                                Kirigami.Theme.highlightColor,
-                                root.activeZone === "left" && root.activeSlot === index ? 0.95 : 0.24)
-                            border.width: root.activeZone === "left" && root.activeSlot === index ? 2 : 1
-                        }
-                    }
+                    readonly property int count: Math.max(1, root.leftWindowCount + 1)
+                    y: 8 + root.activeSlot * ((parent.height - 16) / count)
+                    height: Math.max(1, (parent.height - 16) / count - 4)
+                    radius: Math.max(4, root.cornerRadius - 4)
+                    color: root.alphaColor(Kirigami.Theme.highlightColor, 0.34)
+                    border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.95)
+                    border.width: 2
                 }
             }
 
@@ -407,10 +394,10 @@ Item {
                 radius: root.cornerRadius
                 color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "master" ? root.activeOpacity : root.inactiveOpacity)
+                    root.activeZone === "master" ? root.activeOpacity : Math.min(root.inactiveOpacity, 0.045))
                 border.color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "master" ? 1.0 : 0.52)
+                    root.activeZone === "master" ? 1.0 : 0.24)
                 border.width: root.activeZone === "master" ? 3 : 1
 
                 Behavior on color { ColorAnimation { duration: 110 } }
@@ -425,65 +412,52 @@ Item {
                 radius: root.cornerRadius
                 color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "right" ? root.activeOpacity : root.inactiveOpacity)
+                    root.activeZone === "right" ? root.activeOpacity : Math.min(root.inactiveOpacity, 0.045))
                 border.color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "right" ? 1.0 : 0.52)
+                    root.activeZone === "right" ? 1.0 : 0.24)
                 border.width: root.activeZone === "right" ? 3 : 1
 
                 Behavior on color { ColorAnimation { duration: 110 } }
 
-                Item {
-                    anchors.fill: parent
+                Rectangle {
+                    visible: root.activeZone === "right" && root.activeSlot >= 0
+                    anchors.left: parent.left
+                    anchors.right: parent.right
                     anchors.margins: 8
-
-                    Repeater {
-                        model: Math.max(1, root.rightWindowCount + 1)
-
-                        Rectangle {
-                            required property int index
-                            readonly property int count: Math.max(1, root.rightWindowCount + 1)
-
-                            x: 0
-                            y: index * (parent.height / count) + 2
-                            width: parent.width
-                            height: Math.max(1, parent.height / count - 4)
-                            radius: Math.max(4, root.cornerRadius - 4)
-                            color: root.alphaColor(
-                                Kirigami.Theme.highlightColor,
-                                root.activeZone === "right" && root.activeSlot === index ? 0.36 : 0.06)
-                            border.color: root.alphaColor(
-                                Kirigami.Theme.highlightColor,
-                                root.activeZone === "right" && root.activeSlot === index ? 0.95 : 0.24)
-                            border.width: root.activeZone === "right" && root.activeSlot === index ? 2 : 1
-                        }
-                    }
+                    readonly property int count: Math.max(1, root.rightWindowCount + 1)
+                    y: 8 + root.activeSlot * ((parent.height - 16) / count)
+                    height: Math.max(1, (parent.height - 16) / count - 4)
+                    radius: Math.max(4, root.cornerRadius - 4)
+                    color: root.alphaColor(Kirigami.Theme.highlightColor, 0.34)
+                    border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.95)
+                    border.width: 2
                 }
             }
 
             Rectangle {
                 id: hintCard
-                width: Math.min(330, parent.width * 0.32)
-                height: 126
+                width: Math.min(280, parent.width * 0.28)
+                height: 104
                 anchors.centerIn: parent
-                radius: 16
+                radius: 14
                 color: root.alphaColor(Kirigami.Theme.backgroundColor, 0.92)
                 border.color: Kirigami.Theme.highlightColor
                 border.width: 2
 
                 Column {
                     anchors.centerIn: parent
-                    spacing: 10
+                    spacing: 8
 
                     Item {
-                        width: 122
-                        height: 54
+                        width: 108
+                        height: 44
                         anchors.horizontalCenter: parent.horizontalCenter
 
                         Rectangle {
                             x: 0
                             y: 0
-                            width: 34
+                            width: 30
                             height: parent.height
                             radius: 5
                             color: root.alphaColor(
@@ -494,9 +468,9 @@ Item {
                         }
 
                         Rectangle {
-                            x: 40
+                            x: 36
                             y: 0
-                            width: 42
+                            width: 36
                             height: parent.height
                             radius: 5
                             color: root.alphaColor(
@@ -507,7 +481,7 @@ Item {
                         }
 
                         Rectangle {
-                            x: 88
+                            x: 78
                             y: 0
                             width: 34
                             height: parent.height
@@ -524,7 +498,7 @@ Item {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: root.zoneMessage()
                         color: Kirigami.Theme.textColor
-                        font.pixelSize: 15
+                        font.pixelSize: 14
                         font.bold: true
                     }
                 }
