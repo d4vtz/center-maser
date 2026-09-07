@@ -3,8 +3,8 @@ set -euo pipefail
 
 ID="org.d4vtz.centermaster"
 OVERLAY_ID="org.d4vtz.centermaster.overlay"
-OVERLAY_ROOT="$ROOT/overlay"
 ROOT="$(cd -- "$(dirname -- "$BASH_SOURCE")" && pwd)"
+OVERLAY_ROOT="$ROOT/overlay"
 DEST="$HOME/.local/share/kwin/scripts/$ID"
 
 ACCENT_NAME="CenterMasterAccent"
