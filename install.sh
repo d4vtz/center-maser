@@ -16,6 +16,20 @@ read_decoration() {
     kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key "$key" 2>/dev/null || true
 }
 
+read_script_config() {
+    local key="$1"
+    local fallback="$2"
+    local value
+
+    value="$(kreadconfig6 --file kwinrc --group "Script-$ID" --key "$key" 2>/dev/null || true)"
+
+    if [[ -z "$value" ]]; then
+        printf '%s\n' "$fallback"
+    else
+        printf '%s\n' "$value"
+    fi
+}
+
 write_decoration() {
     local library="$1"
     local theme="$2"
@@ -129,7 +143,17 @@ install_accent_decoration() {
         return 0
     fi
 
-    python3 "$PATCHER" "$ACCENT_DEST/decoration.svg"
+    local active_border_width inactive_border_width inactive_border_opacity
+    active_border_width="$(read_script_config activeBorderWidth 4)"
+    inactive_border_width="$(read_script_config inactiveBorderWidth 2)"
+    inactive_border_opacity="$(read_script_config inactiveBorderOpacity 0.42)"
+
+    python3 "$PATCHER" "$ACCENT_DEST/decoration.svg" \
+        --active-width "$active_border_width" \
+        --inactive-width "$inactive_border_width" \
+        --inactive-opacity "$inactive_border_opacity"
+
+    echo "Bordes: activo=${active_border_width}px, inactivo=${inactive_border_width}px, opacidad=${inactive_border_opacity}"
 
     if [[ -f "$ACCENT_DEST/metadata.desktop" ]]; then
         if grep -q '^Name=' "$ACCENT_DEST/metadata.desktop"; then
