@@ -103,9 +103,7 @@ class WorkspaceState {
     }
 
     add(window, preferredSlot) {
-        if (!window) return;
-
-        if (this.zoneOf(window)) return;
+        if (!window || this.zoneOf(window)) return;
 
         if (!this.master) {
             this.master = window;
@@ -125,13 +123,9 @@ class WorkspaceState {
         }
 
         let side;
-        if (this.left.length < this.right.length) {
-            side = "left";
-        } else if (this.right.length < this.left.length) {
-            side = "right";
-        } else {
-            side = this.nextSide;
-        }
+        if (this.left.length < this.right.length) side = "left";
+        else if (this.right.length < this.left.length) side = "right";
+        else side = this.nextSide;
 
         if (side === "left") {
             this.left.push(window);
@@ -156,7 +150,6 @@ class WorkspaceState {
             const z = this.zoneOf(w);
             if (z && z.zone !== "master") return w;
         }
-
         if (this.right.length) return this.right[0];
         if (this.left.length) return this.left[0];
         return null;
@@ -173,23 +166,19 @@ class WorkspaceState {
             this.left.splice(slot.index, 1);
             return slot;
         }
-
         if (slot.zone === "right") {
             this.right.splice(slot.index, 1);
             return slot;
         }
 
-        // Removing master.
         const replacement = this.chooseReplacementMaster();
         this.master = null;
-
         if (replacement) {
             const rslot = this.zoneOf(replacement);
             if (rslot.zone === "left") this.left.splice(rslot.index, 1);
             if (rslot.zone === "right") this.right.splice(rslot.index, 1);
             this.master = replacement;
         }
-
         return slot;
     }
 
@@ -199,7 +188,6 @@ class WorkspaceState {
 
         const oldMaster = this.master;
         this.master = window;
-
         if (slot.zone === "left") this.left[slot.index] = oldMaster;
         if (slot.zone === "right") this.right[slot.index] = oldMaster;
         return true;
@@ -209,7 +197,10 @@ class WorkspaceState {
         const slot = this.zoneOf(window);
         if (!slot || slot.zone === "master" || slot.index <= 0) return false;
         const stack = slot.zone === "left" ? this.left : this.right;
-        [stack[slot.index - 1], stack[slot.index]] = [stack[slot.index], stack[slot.index - 1]];
+        const target = slot.index - 1;
+        const other = stack[target];
+        stack[target] = window;
+        stack[slot.index] = other;
         return true;
     }
 
@@ -218,19 +209,20 @@ class WorkspaceState {
         if (!slot || slot.zone === "master") return false;
         const stack = slot.zone === "left" ? this.left : this.right;
         if (slot.index >= stack.length - 1) return false;
-        [stack[slot.index + 1], stack[slot.index]] = [stack[slot.index], stack[slot.index + 1]];
+        const target = slot.index + 1;
+        const other = stack[target];
+        stack[target] = window;
+        stack[slot.index] = other;
         return true;
     }
 
     moveLeft(window) {
         const slot = this.zoneOf(window);
         if (!slot) return false;
-
-        if (slot.zone === "right") return this.promote(window);
-        if (slot.zone === "master") {
-            if (!this.left.length) return false;
-            const target = this.left[0];
-            return this.promote(target);
+        if (slot.zone === "right") {
+            this.right.splice(slot.index, 1);
+            this.left.push(window);
+            return true;
         }
         return false;
     }
@@ -238,12 +230,10 @@ class WorkspaceState {
     moveRight(window) {
         const slot = this.zoneOf(window);
         if (!slot) return false;
-
-        if (slot.zone === "left") return this.promote(window);
-        if (slot.zone === "master") {
-            if (!this.right.length) return false;
-            const target = this.right[0];
-            return this.promote(target);
+        if (slot.zone === "left") {
+            this.left.splice(slot.index, 1);
+            this.right.push(window);
+            return true;
         }
         return false;
     }
@@ -274,7 +264,6 @@ class WorkspaceState {
 
     validate() {
         const seen = [];
-
         const push = (w, where) => {
             if (!w) throw new Error("Null window in " + where);
             if (contains(seen, w)) throw new Error("Duplicate window in " + where);
@@ -288,7 +277,6 @@ class WorkspaceState {
         if ((this.left.length || this.right.length) && !this.master) {
             throw new Error("Secondary windows exist without master");
         }
-
         return true;
     }
 }
@@ -319,19 +307,13 @@ function calculateStackRects(windows, area, gap) {
         const nextY = (i === n - 1)
             ? area.y + area.height
             : area.y + (i + 1) * unit + i * gap;
-
         const height = (i === n - 1)
             ? area.y + area.height - y
             : unit;
 
-        result.push({
-            window: windows[i],
-            rect: makeRect(area.x, y, area.width, height)
-        });
-
+        result.push({ window: windows[i], rect: makeRect(area.x, y, area.width, height) });
         y = nextY + (i === n - 1 ? 0 : gap);
     }
-
     return result;
 }
 
@@ -341,7 +323,6 @@ function calculateLayout(state, workArea) {
 
     const outer = (Config.smartGaps && count === 1) ? 0 : Config.outerGap;
     const inner = Config.innerGap;
-
     const area = {
         x: workArea.x + outer,
         y: workArea.y + outer,
@@ -356,8 +337,6 @@ function calculateLayout(state, workArea) {
     const hasLeft = state.left.length > 0;
     const hasRight = state.right.length > 0;
 
-    // Only one secondary side is occupied. Use the dual ratio, regardless
-    // of how many windows happen to be stacked on that side.
     if (!(hasLeft && hasRight)) {
         const sideWindows = hasLeft ? state.left : state.right;
         const masterRatio = state.dualMasterRatio;
@@ -370,20 +349,10 @@ function calculateLayout(state, workArea) {
         let masterArea, sideArea;
         if (hasLeft) {
             sideArea = { x: area.x, y: area.y, width: sideWidth, height: area.height };
-            masterArea = {
-                x: area.x + sideWidth + inner,
-                y: area.y,
-                width: masterWidth,
-                height: area.height
-            };
+            masterArea = { x: area.x + sideWidth + inner, y: area.y, width: masterWidth, height: area.height };
         } else {
             masterArea = { x: area.x, y: area.y, width: masterWidth, height: area.height };
-            sideArea = {
-                x: area.x + masterWidth + inner,
-                y: area.y,
-                width: sideWidth,
-                height: area.height
-            };
+            sideArea = { x: area.x + masterWidth + inner, y: area.y, width: sideWidth, height: area.height };
         }
 
         return [
@@ -392,7 +361,6 @@ function calculateLayout(state, workArea) {
         ];
     }
 
-    // Both sides occupied: centered master.
     const masterRatio = state.centerMasterRatio;
     const sideRatio = (1 - masterRatio) / 2;
     const contentWidth = area.width - inner * 2;
@@ -401,26 +369,9 @@ function calculateLayout(state, workArea) {
     const masterWidth = contentWidth * masterRatio;
     const rightWidth = contentWidth - leftWidth - masterWidth;
 
-    const leftArea = {
-        x: area.x,
-        y: area.y,
-        width: leftWidth,
-        height: area.height
-    };
-
-    const masterArea = {
-        x: area.x + leftWidth + inner,
-        y: area.y,
-        width: masterWidth,
-        height: area.height
-    };
-
-    const rightArea = {
-        x: masterArea.x + masterWidth + inner,
-        y: area.y,
-        width: rightWidth,
-        height: area.height
-    };
+    const leftArea = { x: area.x, y: area.y, width: leftWidth, height: area.height };
+    const masterArea = { x: area.x + leftWidth + inner, y: area.y, width: masterWidth, height: area.height };
+    const rightArea = { x: masterArea.x + masterWidth + inner, y: area.y, width: rightWidth, height: area.height };
 
     return [
         ...calculateStackRects(state.left, leftArea, inner),
@@ -436,17 +387,11 @@ class Controller {
         this.applyingLayout = false;
     }
 
-    windowKey(window) {
-        return idOf(window);
-    }
-
-    stateKey(output, desktop) {
-        return outputId(output) + "::" + desktopId(desktop);
-    }
+    windowKey(window) { return idOf(window); }
+    stateKey(output, desktop) { return outputId(output) + "::" + desktopId(desktop); }
 
     currentDesktopFor(window) {
         if (window.desktops && window.desktops.length > 0) return window.desktops[0];
-        // All-desktop windows are not tiled in v0.1.
         return null;
     }
 
@@ -456,9 +401,7 @@ class Controller {
         if (!output || !desktop) return null;
 
         const key = this.stateKey(output, desktop);
-        if (!this.states.has(key) && create) {
-            this.states.set(key, new WorkspaceState(output, desktop));
-        }
+        if (!this.states.has(key) && create) this.states.set(key, new WorkspaceState(output, desktop));
         return this.states.get(key) || null;
     }
 
@@ -472,11 +415,6 @@ class Controller {
         return "tiled";
     }
 
-    shouldLayoutWindow(window) {
-        const m = this.managed.get(this.windowKey(window));
-        return m && m.mode === "tiled" && !window.minimized && !window.fullScreen;
-    }
-
     attachSignals(window) {
         const key = this.windowKey(window);
 
@@ -487,18 +425,9 @@ class Controller {
                 this.relayoutForWindow(window);
             });
         }
-
-        if (window.fullScreenChanged) {
-            window.fullScreenChanged.connect(() => this.relayoutForWindow(window));
-        }
-
-        if (window.outputChanged) {
-            window.outputChanged.connect(() => this.rehomeWindow(window));
-        }
-
-        if (window.desktopsChanged) {
-            window.desktopsChanged.connect(() => this.rehomeWindow(window));
-        }
+        if (window.fullScreenChanged) window.fullScreenChanged.connect(() => this.relayoutForWindow(window));
+        if (window.outputChanged) window.outputChanged.connect(() => this.rehomeWindow(window));
+        if (window.desktopsChanged) window.desktopsChanged.connect(() => this.rehomeWindow(window));
 
         if (window.interactiveMoveResizeStarted) {
             window.interactiveMoveResizeStarted.connect(() => {
@@ -513,14 +442,10 @@ class Controller {
             window.interactiveMoveResizeFinished.connect(() => {
                 const m = this.managed.get(key);
                 if (!m) return;
-
                 const wasMoving = m.userMoving;
                 const wasResizing = m.userResizing;
                 m.userMoving = false;
                 m.userResizing = false;
-
-                // v0.1: snap back after interactive manipulation.
-                // Drop-zone reassignment is intentionally deferred to v0.2.
                 if (wasMoving || wasResizing) this.relayoutForWindow(window);
             });
         }
@@ -535,10 +460,7 @@ class Controller {
         this.managed.set(key, managed);
         this.attachSignals(window);
 
-        if (managed.mode !== "tiled") {
-            log("add", key, "mode=", managed.mode);
-            return;
-        }
+        if (managed.mode !== "tiled") return;
 
         const state = this.stateFor(window, true);
         if (!state) {
@@ -550,8 +472,6 @@ class Controller {
         state.focus(window);
         state.validate();
         managed.workspaceKey = this.stateKey(state.output, state.desktop);
-
-        log("add tiled", key, managed.workspaceKey);
         this.relayout(state);
     }
 
@@ -569,9 +489,7 @@ class Controller {
                 if (state.tiledCount() === 0) this.states.delete(managed.workspaceKey);
             }
         }
-
         this.managed.delete(key);
-        log("removed", key);
     }
 
     rehomeWindow(window) {
@@ -582,8 +500,8 @@ class Controller {
         const oldKey = managed.workspaceKey;
         const oldState = oldKey ? this.states.get(oldKey) : null;
         const newState = this.stateFor(window, true);
-
         if (!newState) return;
+
         const newKey = this.stateKey(newState.output, newState.desktop);
         if (oldKey === newKey) return;
 
@@ -631,16 +549,13 @@ class Controller {
 
         const area = workspace.clientArea(KWin.WorkArea, state.output, state.desktop);
         const visibleState = new WorkspaceState(state.output, state.desktop);
-
-        // Geometry excludes minimized windows but preserves the logical slots.
         const visible = w => {
             const m = this.managed.get(this.windowKey(w));
             return m && m.mode === "tiled" && !w.minimized && !w.fullScreen;
         };
 
-        if (state.master && visible(state.master)) {
-            visibleState.master = state.master;
-        } else {
+        if (state.master && visible(state.master)) visibleState.master = state.master;
+        else {
             const candidates = state.left.concat(state.right).filter(visible);
             if (candidates.length) visibleState.master = candidates[0];
         }
@@ -653,7 +568,6 @@ class Controller {
         visibleState.centerMasterRatio = state.centerMasterRatio;
 
         const layout = calculateLayout(visibleState, area);
-
         this.applyingLayout = true;
         try {
             for (const item of layout) {
@@ -671,7 +585,6 @@ class Controller {
         const c = this.activeContext();
         if (!c) return;
         const z = c.state.zoneOf(c.window);
-
         let target = null;
         if (z.zone === "master" && c.state.left.length) target = this.closestVertical(c.window, c.state.left);
         if (z.zone === "right") target = c.state.master;
@@ -682,7 +595,6 @@ class Controller {
         const c = this.activeContext();
         if (!c) return;
         const z = c.state.zoneOf(c.window);
-
         let target = null;
         if (z.zone === "master" && c.state.right.length) target = this.closestVertical(c.window, c.state.right);
         if (z.zone === "left") target = c.state.master;
@@ -709,7 +621,7 @@ class Controller {
 
     closestVertical(reference, candidates) {
         const cy = reference.frameGeometry.y + reference.frameGeometry.height / 2;
-        let best = candidates[0];
+        let best = null;
         let bestDistance = Infinity;
         for (const w of candidates) {
             if (w.minimized) continue;
@@ -726,41 +638,28 @@ class Controller {
     mutateActive(mutator) {
         const c = this.activeContext();
         if (!c) return;
-        if (mutator(c.state, c.window)) {
+        const movedWindow = c.window;
+        if (mutator(c.state, movedWindow)) {
             c.state.validate();
             this.relayout(c.state);
+            workspace.activeWindow = movedWindow;
+            c.state.focus(movedWindow);
         }
     }
 
-    promoteActive() {
-        this.mutateActive((s, w) => s.promote(w));
-    }
-
-    moveLeft() {
-        this.mutateActive((s, w) => s.moveLeft(w));
-    }
-
-    moveRight() {
-        this.mutateActive((s, w) => s.moveRight(w));
-    }
-
-    moveUp() {
-        this.mutateActive((s, w) => s.moveUp(w));
-    }
-
-    moveDown() {
-        this.mutateActive((s, w) => s.moveDown(w));
-    }
-
-    resizeMaster(delta) {
-        this.mutateActive((s) => s.resizeMaster(delta));
-    }
+    promoteActive() { this.mutateActive((s, w) => s.promote(w)); }
+    moveLeft() { this.mutateActive((s, w) => s.moveLeft(w)); }
+    moveRight() { this.mutateActive((s, w) => s.moveRight(w)); }
+    moveUp() { this.mutateActive((s, w) => s.moveUp(w)); }
+    moveDown() { this.mutateActive((s, w) => s.moveDown(w)); }
+    resizeMaster(delta) { this.mutateActive((s) => s.resizeMaster(delta)); }
 
     resetRatios() {
         const c = this.activeContext();
         if (!c) return;
         c.state.resetRatios();
         this.relayout(c.state);
+        workspace.activeWindow = c.window;
     }
 
     toggleFloating() {
@@ -781,6 +680,7 @@ class Controller {
             managed.mode = "floating";
             managed.workspaceKey = null;
             this.relayout(state);
+            workspace.activeWindow = window;
             return;
         }
 
@@ -794,6 +694,7 @@ class Controller {
             managed.workspaceKey = this.stateKey(state.output, state.desktop);
             managed.previousSlot = null;
             this.relayout(state);
+            workspace.activeWindow = window;
         }
     }
 }
@@ -801,36 +702,22 @@ class Controller {
 const controller = new Controller();
 
 function registerShortcuts() {
-    registerShortcut("CenterMasterFocusLeft", "Center Master: Focus left", "Meta+Left",
-        () => controller.focusLeft());
-    registerShortcut("CenterMasterFocusRight", "Center Master: Focus right", "Meta+Right",
-        () => controller.focusRight());
-    registerShortcut("CenterMasterFocusUp", "Center Master: Focus up", "Meta+Up",
-        () => controller.focusUp());
-    registerShortcut("CenterMasterFocusDown", "Center Master: Focus down", "Meta+Down",
-        () => controller.focusDown());
+    registerShortcut("CenterMasterFocusLeft", "Center Master: Focus left", "Meta+H", () => controller.focusLeft());
+    registerShortcut("CenterMasterFocusRight", "Center Master: Focus right", "Meta+L", () => controller.focusRight());
+    registerShortcut("CenterMasterFocusUp", "Center Master: Focus up", "Meta+K", () => controller.focusUp());
+    registerShortcut("CenterMasterFocusDown", "Center Master: Focus down", "Meta+J", () => controller.focusDown());
 
-    registerShortcut("CenterMasterMoveLeft", "Center Master: Move left", "Meta+Shift+Left",
-        () => controller.moveLeft());
-    registerShortcut("CenterMasterMoveRight", "Center Master: Move right", "Meta+Shift+Right",
-        () => controller.moveRight());
-    registerShortcut("CenterMasterMoveUp", "Center Master: Move up", "Meta+Shift+Up",
-        () => controller.moveUp());
-    registerShortcut("CenterMasterMoveDown", "Center Master: Move down", "Meta+Shift+Down",
-        () => controller.moveDown());
+    registerShortcut("CenterMasterMoveLeft", "Center Master: Move to left stack", "Meta+Shift+H", () => controller.moveLeft());
+    registerShortcut("CenterMasterMoveRight", "Center Master: Move to right stack", "Meta+Shift+L", () => controller.moveRight());
+    registerShortcut("CenterMasterMoveUp", "Center Master: Move up", "Meta+Shift+K", () => controller.moveUp());
+    registerShortcut("CenterMasterMoveDown", "Center Master: Move down", "Meta+Shift+J", () => controller.moveDown());
 
-    registerShortcut("CenterMasterPromote", "Center Master: Promote to master", "Meta+Return",
-        () => controller.promoteActive());
+    registerShortcut("CenterMasterPromote", "Center Master: Promote to master", "Meta+Return", () => controller.promoteActive());
+    registerShortcut("CenterMasterFloat", "Center Master: Toggle floating", "Meta+Space", () => controller.toggleFloating());
 
-    registerShortcut("CenterMasterFloat", "Center Master: Toggle floating", "Meta+F",
-        () => controller.toggleFloating());
-
-    registerShortcut("CenterMasterGrow", "Center Master: Grow master", "Meta+Ctrl+Right",
-        () => controller.resizeMaster(Config.ratioStep));
-    registerShortcut("CenterMasterShrink", "Center Master: Shrink master", "Meta+Ctrl+Left",
-        () => controller.resizeMaster(-Config.ratioStep));
-    registerShortcut("CenterMasterResetRatio", "Center Master: Reset ratios", "Meta+Ctrl+0",
-        () => controller.resetRatios());
+    registerShortcut("CenterMasterGrow", "Center Master: Grow master", "Meta+=", () => controller.resizeMaster(Config.ratioStep));
+    registerShortcut("CenterMasterShrink", "Center Master: Shrink master", "Meta+-", () => controller.resizeMaster(-Config.ratioStep));
+    registerShortcut("CenterMasterResetRatio", "Center Master: Reset ratios", "Meta+0", () => controller.resetRatios());
 }
 
 function bootstrap() {
@@ -842,7 +729,6 @@ function bootstrap() {
 
     if (workspace.currentDesktopChanged) {
         workspace.currentDesktopChanged.connect((_previous, current, output) => {
-            // Re-layout the state that just became visible.
             const key = controller.stateKey(output, current);
             const state = controller.states.get(key);
             if (state) controller.relayout(state);
@@ -855,10 +741,7 @@ function bootstrap() {
         });
     }
 
-    for (const window of workspace.stackingOrder) {
-        controller.addWindow(window);
-    }
-
+    for (const window of workspace.stackingOrder) controller.addWindow(window);
     log("started", "states=", controller.states.size, "windows=", controller.managed.size);
 }
 
