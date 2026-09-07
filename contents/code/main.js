@@ -1285,22 +1285,25 @@ class Controller {
         const stack = zone === "left" ? state.left : state.right;
         const filtered = stack.filter(w => w !== geometry.__window);
         const centerY = geometry.y + geometry.height / 2;
-        const index = this.stackIndexForDrop(filtered, centerY, base);
+        const index = this.stackIndexForDrop(filtered, centerY);
 
         const zoneWidth = Math.max(1, base.width * edge - inner);
         const x = zone === "left"
             ? base.x
             : base.x + base.width - zoneWidth;
 
-        const count = filtered.length + 1;
-        const totalGap = inner * Math.max(0, count - 1);
-        const slotHeight = Math.max(1, (base.height - totalGap) / count);
+        if (!filtered.length) {
+            return makeRect(x, base.y, zoneWidth, base.height);
+        }
+
+        const insertionY = this.insertionYForStack(filtered, index, base);
+        const markerHeight = Math.max(4, Math.min(10, inner || 6));
 
         return makeRect(
             x,
-            base.y + index * (slotHeight + inner),
+            insertionY - markerHeight / 2,
             zoneWidth,
-            slotHeight
+            markerHeight
         );
     }
 
@@ -1355,20 +1358,100 @@ class Controller {
         }
     }
 
-    stackIndexForDrop(stack, centerY, area) {
+    stackIndexForDrop(stack, centerY) {
         if (!stack.length) return 0;
 
-        const relativeY = clamp(
-            (centerY - area.y) / Math.max(1, area.height),
-            0,
-            0.999999
-        );
+        for (let i = 0; i < stack.length; ++i) {
+            const geometry = stack[i].frameGeometry;
+            const windowCenterY = geometry.y + geometry.height / 2;
+
+            if (centerY < windowCenterY) {
+                return i;
+            }
+        }
+
+        return stack.length;
+    }
+
+    insertionYForStack(stack, index, area) {
+        if (!stack.length) {
+            return area.y + area.height / 2;
+        }
+
+        if (index <= 0) {
+            return clamp(
+                stack[0].frameGeometry.y,
+                area.y,
+                area.y + area.height
+            );
+        }
+
+        if (index >= stack.length) {
+            const last = stack[stack.length - 1].frameGeometry;
+            return clamp(
+                last.y + last.height,
+                area.y,
+                area.y + area.height
+            );
+        }
+
+        const previous = stack[index - 1].frameGeometry;
+        const next = stack[index].frameGeometry;
 
         return clamp(
-            Math.floor(relativeY * (stack.length + 1)),
-            0,
-            stack.length
+            ((previous.y + previous.height) + next.y) / 2,
+            area.y,
+            area.y + area.height
         );
+    }
+
+    dragPreview(window) {
+        const managed = this.managed.get(this.windowKey(window));
+
+        if (!managed || managed.mode !== "tiled" || !managed.workspaceKey) {
+            return null;
+        }
+
+        const state = this.states.get(managed.workspaceKey);
+        if (!state) return null;
+
+        const area = workspace.clientArea(
+            KWinApi.WorkArea,
+            state.output,
+            state.desktop
+        );
+
+        const geometry = window.frameGeometry;
+        const centerY = geometry.y + geometry.height / 2;
+        const zone = this.dropZoneForGeometry(geometry, area);
+
+        const left = state.left.filter(w => w !== window);
+        const right = state.right.filter(w => w !== window);
+
+        let index = -1;
+        let insertionY = area.y + area.height / 2;
+
+        if (zone === "left") {
+            index = this.stackIndexForDrop(left, centerY);
+            insertionY = this.insertionYForStack(left, index, area);
+        } else if (zone === "right") {
+            index = this.stackIndexForDrop(right, centerY);
+            insertionY = this.insertionYForStack(right, index, area);
+        }
+
+        return {
+            zone: zone,
+            index: index,
+            insertionY: insertionY,
+            leftCount: left.length,
+            rightCount: right.length,
+            workArea: {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: area.height
+            }
+        };
     }
 
     handleDrop(window) {
@@ -1401,14 +1484,12 @@ class Controller {
         if (zone === "left") {
             index = this.stackIndexForDrop(
                 state.left.filter(w => w !== window),
-                centerY,
-                area
+                centerY
             );
         } else if (zone === "right") {
             index = this.stackIndexForDrop(
                 state.right.filter(w => w !== window),
-                centerY,
-                area
+                centerY
             );
         }
 
@@ -1551,3 +1632,8 @@ function growMaster() {
     if (controller && Config) controller.resizeMaster(Config.ratioStep);
 }
 function resetRatios() { if (controller) controller.resetRatios(); }
+
+function dragPreview(window) {
+    if (!controller || !window) return null;
+    return controller.dragPreview(window);
+}
