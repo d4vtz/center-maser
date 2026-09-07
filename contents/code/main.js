@@ -59,7 +59,7 @@ let controller = null;
 function log() {
     if (!Config.debug) return;
     const args = Array.prototype.slice.call(arguments);
-    print("[CenterMaster] " + args.join(" "));
+    console.log("[CenterMaster] " + args.join(" "));
 }
 
 function clamp(value, min, max) {
