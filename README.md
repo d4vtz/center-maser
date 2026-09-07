@@ -1,4 +1,4 @@
-# Center Master v0.4.1
+# Center Master v0.4.2
 
 KWin/Plasma 6 automatic tiling script with a stable centered master and two secondary stacks.
 
@@ -195,9 +195,10 @@ The active window border follows KDE's accent color through the Plasma SVG role 
 
 Defaults:
 
-- active border: 2 px, accent/highlight color
-- inactive border: visually 1 px, subdued foreground color
-- title area: current KDE window background
+- active border: 4 px by default, configurable from 1 to 12 px
+- inactive border: 2 px by default, configurable from 0 to 12 px
+- inactive border opacity: 0.42 by default, configurable from 0 to 1
+- title area: inherited unchanged from the original Aurorae theme
 - title/buttons: current KDE foreground
 - no custom shadow; gaps remain responsible for visual separation
 
@@ -237,3 +238,22 @@ v0.4.1 no longer ships its own decoration assets. Instead, `install.sh`:
 For an existing v0.4.0 install, the saved file `~/.config/center-master/decoration-backup.conf` is used as the source of truth, so rerunning `./install.sh` rebuilds the accent decoration from the original theme rather than from the temporary Center Master decoration.
 
 If the original decoration is not an Aurorae SVG theme, Center Master now leaves it untouched instead of replacing it.
+
+
+### v0.4.2 configurable border appearance
+
+The cloned Aurorae border can now be adjusted from Center Master's configuration page:
+
+- `activeBorderWidth`: default 4 px, range 1-12 px
+- `inactiveBorderWidth`: default 2 px, range 0-12 px
+- `inactiveBorderOpacity`: default 0.42, range 0-1
+
+The active border continues to use `ColorScheme-Highlight`, so changing the KDE accent color does not require changing Center Master.
+
+Because Aurorae border thickness is baked into the generated SVG, after changing these three settings rerun:
+
+```bash
+./install.sh
+```
+
+The installer reads the values from KWin's `Script-org.d4vtz.centermaster` configuration group, reclones the original Aurorae decoration, reapplies only the inner border, and reloads KWin.
