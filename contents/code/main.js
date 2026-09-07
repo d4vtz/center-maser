@@ -218,24 +218,18 @@ class WorkspaceState {
 
     moveLeft(window) {
         const slot = this.zoneOf(window);
-        if (!slot) return false;
-        if (slot.zone === "right") {
-            this.right.splice(slot.index, 1);
-            this.left.push(window);
-            return true;
-        }
-        return false;
+        if (!slot || slot.zone !== "right") return false;
+        this.right.splice(slot.index, 1);
+        this.left.push(window);
+        return true;
     }
 
     moveRight(window) {
         const slot = this.zoneOf(window);
-        if (!slot) return false;
-        if (slot.zone === "left") {
-            this.left.splice(slot.index, 1);
-            this.right.push(window);
-            return true;
-        }
-        return false;
+        if (!slot || slot.zone !== "left") return false;
+        this.left.splice(slot.index, 1);
+        this.right.push(window);
+        return true;
     }
 
     resizeMaster(delta) {
@@ -489,6 +483,7 @@ class Controller {
                 if (state.tiledCount() === 0) this.states.delete(managed.workspaceKey);
             }
         }
+
         this.managed.delete(key);
     }
 
@@ -568,6 +563,7 @@ class Controller {
         visibleState.centerMasterRatio = state.centerMasterRatio;
 
         const layout = calculateLayout(visibleState, area);
+
         this.applyingLayout = true;
         try {
             for (const item of layout) {
@@ -579,6 +575,22 @@ class Controller {
         } finally {
             this.applyingLayout = false;
         }
+    }
+
+    closestVertical(reference, candidates) {
+        const cy = reference.frameGeometry.y + reference.frameGeometry.height / 2;
+        let best = null;
+        let bestDistance = Infinity;
+        for (const w of candidates) {
+            if (w.minimized) continue;
+            const wy = w.frameGeometry.y + w.frameGeometry.height / 2;
+            const d = Math.abs(wy - cy);
+            if (d < bestDistance) {
+                best = w;
+                bestDistance = d;
+            }
+        }
+        return best;
     }
 
     focusLeft() {
@@ -619,31 +631,14 @@ class Controller {
         if (z.index < stack.length - 1) workspace.activeWindow = stack[z.index + 1];
     }
 
-    closestVertical(reference, candidates) {
-        const cy = reference.frameGeometry.y + reference.frameGeometry.height / 2;
-        let best = null;
-        let bestDistance = Infinity;
-        for (const w of candidates) {
-            if (w.minimized) continue;
-            const wy = w.frameGeometry.y + w.frameGeometry.height / 2;
-            const d = Math.abs(wy - cy);
-            if (d < bestDistance) {
-                best = w;
-                bestDistance = d;
-            }
-        }
-        return best;
-    }
-
     mutateActive(mutator) {
         const c = this.activeContext();
         if (!c) return;
-        const movedWindow = c.window;
-        if (mutator(c.state, movedWindow)) {
+        if (mutator(c.state, c.window)) {
             c.state.validate();
             this.relayout(c.state);
-            workspace.activeWindow = movedWindow;
-            c.state.focus(movedWindow);
+            workspace.activeWindow = c.window;
+            c.state.focus(c.window);
         }
     }
 
@@ -673,7 +668,6 @@ class Controller {
         if (managed.mode === "tiled") {
             const state = managed.workspaceKey ? this.states.get(managed.workspaceKey) : null;
             if (!state) return;
-
             managed.previousSlot = state.zoneOf(window);
             state.remove(window);
             state.validate();
@@ -703,20 +697,20 @@ const controller = new Controller();
 
 function registerShortcuts() {
     registerShortcut("CenterMasterFocusLeft", "Center Master: Focus left", "Meta+H", () => controller.focusLeft());
-    registerShortcut("CenterMasterFocusRight", "Center Master: Focus right", "Meta+L", () => controller.focusRight());
-    registerShortcut("CenterMasterFocusUp", "Center Master: Focus up", "Meta+K", () => controller.focusUp());
     registerShortcut("CenterMasterFocusDown", "Center Master: Focus down", "Meta+J", () => controller.focusDown());
+    registerShortcut("CenterMasterFocusUp", "Center Master: Focus up", "Meta+K", () => controller.focusUp());
+    registerShortcut("CenterMasterFocusRight", "Center Master: Focus right", "Meta+L", () => controller.focusRight());
 
     registerShortcut("CenterMasterMoveLeft", "Center Master: Move to left stack", "Meta+Shift+H", () => controller.moveLeft());
-    registerShortcut("CenterMasterMoveRight", "Center Master: Move to right stack", "Meta+Shift+L", () => controller.moveRight());
-    registerShortcut("CenterMasterMoveUp", "Center Master: Move up", "Meta+Shift+K", () => controller.moveUp());
     registerShortcut("CenterMasterMoveDown", "Center Master: Move down", "Meta+Shift+J", () => controller.moveDown());
+    registerShortcut("CenterMasterMoveUp", "Center Master: Move up", "Meta+Shift+K", () => controller.moveUp());
+    registerShortcut("CenterMasterMoveRight", "Center Master: Move to right stack", "Meta+Shift+L", () => controller.moveRight());
 
     registerShortcut("CenterMasterPromote", "Center Master: Promote to master", "Meta+Return", () => controller.promoteActive());
     registerShortcut("CenterMasterFloat", "Center Master: Toggle floating", "Meta+Space", () => controller.toggleFloating());
 
-    registerShortcut("CenterMasterGrow", "Center Master: Grow master", "Meta+=", () => controller.resizeMaster(Config.ratioStep));
     registerShortcut("CenterMasterShrink", "Center Master: Shrink master", "Meta+-", () => controller.resizeMaster(-Config.ratioStep));
+    registerShortcut("CenterMasterGrow", "Center Master: Grow master", "Meta+=", () => controller.resizeMaster(Config.ratioStep));
     registerShortcut("CenterMasterResetRatio", "Center Master: Reset ratios", "Meta+0", () => controller.resetRatios());
 }
 
