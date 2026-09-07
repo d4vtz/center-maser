@@ -9,7 +9,7 @@
       }
     ],
     "Id": "org.d4vtz.centermaster",
-    "Version": "0.4.2",
+    "Version": "0.5.0",
     "License": "GPL-3.0-or-later"
   },
   "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
