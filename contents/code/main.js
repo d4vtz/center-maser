@@ -1305,7 +1305,7 @@ class Controller {
 
         const state = this.states.get(managed.workspaceKey);
         if (!state) {
-            workspace.hideOutline();
+            this.hideDragHighlight();
             return;
         }
 
