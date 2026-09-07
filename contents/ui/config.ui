@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CenterMasterConfig</class>
+ <widget class="QWidget" name="CenterMasterConfig">
+  <property name="windowTitle">
+   <string>Center Master</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="geometryGroup">
+     <property name="title"><string>Geometría</string></property>
+     <layout class="QFormLayout" name="geometryLayout">
+      <item row="0" column="0"><widget class="QLabel" name="outerGapLabel"><property name="text"><string>Gap exterior:</string></property></widget></item>
+      <item row="0" column="1"><widget class="QSpinBox" name="kcfg_outerGap"><property name="minimum"><number>0</number></property><property name="maximum"><number>128</number></property><property name="suffix"><string> px</string></property></widget></item>
+      <item row="1" column="0"><widget class="QLabel" name="innerGapLabel"><property name="text"><string>Gap interior:</string></property></widget></item>
+      <item row="1" column="1"><widget class="QSpinBox" name="kcfg_innerGap"><property name="minimum"><number>0</number></property><property name="maximum"><number>128</number></property><property name="suffix"><string> px</string></property></widget></item>
+      <item row="2" column="0" colspan="2"><widget class="QCheckBox" name="kcfg_smartGaps"><property name="text"><string>Eliminar gap exterior cuando solo hay una ventana</string></property></widget></item>
+      <item row="3" column="0"><widget class="QLabel" name="dualRatioLabel"><property name="text"><string>Master con una pila lateral:</string></property></widget></item>
+      <item row="3" column="1"><widget class="QDoubleSpinBox" name="kcfg_dualMasterRatio"><property name="decimals"><number>2</number></property><property name="minimum"><double>0.300000000000000</double></property><property name="maximum"><double>0.900000000000000</double></property><property name="singleStep"><double>0.010000000000000</double></property></widget></item>
+      <item row="4" column="0"><widget class="QLabel" name="centerRatioLabel"><property name="text"><string>Master con dos pilas:</string></property></widget></item>
+      <item row="4" column="1"><widget class="QDoubleSpinBox" name="kcfg_centerMasterRatio"><property name="decimals"><number>2</number></property><property name="minimum"><double>0.200000000000000</double></property><property name="maximum"><double>0.800000000000000</double></property><property name="singleStep"><double>0.010000000000000</double></property></widget></item>
+      <item row="5" column="0"><widget class="QLabel" name="ratioStepLabel"><property name="text"><string>Paso al redimensionar:</string></property></widget></item>
+      <item row="5" column="1"><widget class="QDoubleSpinBox" name="kcfg_ratioStep"><property name="decimals"><number>2</number></property><property name="minimum"><double>0.010000000000000</double></property><property name="maximum"><double>0.200000000000000</double></property><property name="singleStep"><double>0.010000000000000</double></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="dragGroup">
+     <property name="title"><string>Arrastrar ventanas</string></property>
+     <layout class="QFormLayout" name="dragLayout">
+      <item row="0" column="0" colspan="2"><widget class="QCheckBox" name="kcfg_enableDragReassign"><property name="text"><string>Reasignar LEFT / MASTER / RIGHT al soltar</string></property></widget></item>
+      <item row="1" column="0"><widget class="QLabel" name="dropRatioLabel"><property name="text"><string>Ancho de zonas laterales:</string></property></widget></item>
+      <item row="1" column="1"><widget class="QDoubleSpinBox" name="kcfg_dropZoneRatio"><property name="decimals"><number>2</number></property><property name="minimum"><double>0.150000000000000</double></property><property name="maximum"><double>0.450000000000000</double></property><property name="singleStep"><double>0.010000000000000</double></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="rulesGroup">
+     <property name="title"><string>Reglas por aplicación</string></property>
+     <layout class="QFormLayout" name="rulesLayout">
+      <item row="0" column="0"><widget class="QLabel" name="floatingAppsLabel"><property name="text"><string>Siempre flotantes:</string></property></widget></item>
+      <item row="0" column="1"><widget class="QLineEdit" name="kcfg_floatingApps"><property name="placeholderText"><string>pavucontrol, org.kde.kcalc</string></property></widget></item>
+      <item row="1" column="0"><widget class="QLabel" name="ignoredAppsLabel"><property name="text"><string>Ignoradas:</string></property></widget></item>
+      <item row="1" column="1"><widget class="QLineEdit" name="kcfg_ignoredApps"><property name="placeholderText"><string>application-id, otra-app</string></property></widget></item>
+      <item row="2" column="0"><widget class="QLabel" name="tiledAppsLabel"><property name="text"><string>Forzar tiled:</string></property></widget></item>
+      <item row="2" column="1"><widget class="QLineEdit" name="kcfg_tiledApps"><property name="placeholderText"><string>org.example.app</string></property></widget></item>
+      <item row="3" column="0" colspan="2"><widget class="QLabel" name="rulesHelp"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>Separa valores con comas, punto y coma o saltos de línea. Se comparan resourceClass, resourceName y desktopFileName. Se admite * al inicio o al final.</string></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item><widget class="QCheckBox" name="kcfg_debug"><property name="text"><string>Activar registro de depuración</string></property></widget></item>
+   <item><widget class="QLabel" name="reloadNotice"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>Recarga Center Master tras guardar cambios para aplicarlos al script en ejecución.</string></property></widget></item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation"><enum>Qt::Vertical</enum></property>
+     <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
