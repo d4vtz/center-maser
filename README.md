@@ -1,4 +1,4 @@
-# Center Master v0.4
+# Center Master v0.4.1
 
 KWin/Plasma 6 automatic tiling script with a stable centered master and two secondary stacks.
 
@@ -220,3 +220,20 @@ bash restore-decoration.sh
 ```
 
 The SVG border colors follow KDE's current color scheme automatically. Aurorae stores title text colors in its rc file rather than as an SVG color role, so `install.sh` synchronizes those title colors from `kdeglobals` when the decoration is installed.
+
+
+### v0.4.1 decoration correction
+
+The first v0.4 implementation shipped a standalone Aurorae decoration. That changed the user's titlebar and button artwork, which was not the intended behavior.
+
+v0.4.1 no longer ships its own decoration assets. Instead, `install.sh`:
+
+1. recovers the decoration that was active before Center Master Accent;
+2. if it is an Aurorae SVG theme, clones that exact theme into `CenterMasterAccent`;
+3. keeps the original titlebar, buttons, shadows and geometry;
+4. adds only Aurorae `innerborder` and `innerborder-inactive` FrameSvg elements;
+5. uses `ColorScheme-Highlight` for the active border and a subdued `ColorScheme-Text` for inactive borders.
+
+For an existing v0.4.0 install, the saved file `~/.config/center-master/decoration-backup.conf` is used as the source of truth, so rerunning `./install.sh` rebuilds the accent decoration from the original theme rather than from the temporary Center Master decoration.
+
+If the original decoration is not an Aurorae SVG theme, Center Master now leaves it untouched instead of replacing it.
