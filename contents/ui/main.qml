@@ -14,6 +14,8 @@ Item {
     property int leftWindowCount: 0
     property int rightWindowCount: 0
     property int activeSlot: -1
+    property real insertionY: -1
+    property var previewData: null
 
     readonly property bool overlayEnabled: boolConfig("showZoneOverlay", true)
     readonly property real dropZoneRatio: Math.min(Math.max(KWin.readConfig("dropZoneRatio", 0.30), 0.15), 0.45)
@@ -96,48 +98,43 @@ Item {
         return "master"
     }
 
-    function windowBelongsToCurrentArea(window) {
-        if (!window || window === dragWindow || !window.normalWindow ||
-                window.minimized || window.fullScreen) return false
-
-        var g = window.frameGeometry
-        if (!g || g.width <= 0 || g.height <= 0) return false
-
-        var cx = g.x + g.width / 2
-        var cy = g.y + g.height / 2
-
-        return cx >= workArea.x && cx <= workArea.x + workArea.width &&
-               cy >= workArea.y && cy <= workArea.y + workArea.height
-    }
-
-    function refreshStackCounts() {
-        var left = 0
-        var right = 0
-        var windows = Workspace.stackingOrder
-
-        for (var i = 0; i < windows.length; ++i) {
-            var window = windows[i]
-            if (!windowBelongsToCurrentArea(window)) continue
-
-            var g = window.frameGeometry
-            var zone = zoneAt(Qt.point(g.x + g.width / 2, g.y + g.height / 2))
-            if (zone === "left") ++left
-            else if (zone === "right") ++right
+    function refreshPreview() {
+        if (!dragWindow) {
+            previewData = null
+            activeZone = ""
+            activeSlot = -1
+            insertionY = -1
+            leftWindowCount = 0
+            rightWindowCount = 0
+            return
         }
 
-        leftWindowCount = left
-        rightWindowCount = right
-    }
+        var preview = Logic.dragPreview(dragWindow)
+        previewData = preview
 
-    function slotForCursor(zone) {
-        if (zone !== "left" && zone !== "right") return -1
+        if (!preview) {
+            activeZone = ""
+            activeSlot = -1
+            insertionY = -1
+            leftWindowCount = 0
+            rightWindowCount = 0
+            return
+        }
 
-        var existing = zone === "left" ? leftWindowCount : rightWindowCount
-        var slots = Math.max(1, existing + 1)
-        var relativeY = Math.max(0, Math.min(0.999999,
-            (Workspace.cursorPos.y - workArea.y) / Math.max(1, workArea.height)))
+        activeZone = preview.zone
+        activeSlot = preview.index
+        insertionY = preview.insertionY
+        leftWindowCount = preview.leftCount
+        rightWindowCount = preview.rightCount
 
-        return Math.max(0, Math.min(slots - 1, Math.floor(relativeY * slots)))
+        if (preview.workArea) {
+            workArea = Qt.rect(
+                preview.workArea.x,
+                preview.workArea.y,
+                preview.workArea.width,
+                preview.workArea.height
+            )
+        }
     }
 
     function connectOverlayWindow(window) {
@@ -148,10 +145,8 @@ Item {
 
             root.refreshWorkArea()
             root.dragWindow = window
-            root.refreshStackCounts()
             root.dragging = true
-            root.activeZone = root.zoneAt(Workspace.cursorPos)
-            root.activeSlot = root.slotForCursor(root.activeZone)
+            root.refreshPreview()
             overlay.visible = true
             pollTimer.start()
         })
@@ -163,6 +158,8 @@ Item {
             root.dragging = false
             root.activeZone = ""
             root.activeSlot = -1
+            root.insertionY = -1
+            root.previewData = null
             root.dragWindow = null
             overlay.visible = false
         })
@@ -171,10 +168,7 @@ Item {
     function updateOverlayPointer() {
         if (!dragging || !dragWindow) return
 
-        refreshWorkArea()
-        refreshStackCounts()
-        activeZone = zoneAt(Workspace.cursorPos)
-        activeSlot = slotForCursor(activeZone)
+        refreshPreview()
     }
 
     function zoneMessage() {
@@ -371,17 +365,22 @@ Item {
                 Behavior on color { ColorAnimation { duration: 110 } }
 
                 Rectangle {
-                    visible: root.activeZone === "left" && root.activeSlot >= 0
+                    visible: root.activeZone === "left" &&
+                             root.activeSlot >= 0 &&
+                             root.leftWindowCount > 0 &&
+                             root.insertionY >= root.workArea.y
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.margins: 8
-                    readonly property int count: Math.max(1, root.leftWindowCount + 1)
-                    y: 8 + root.activeSlot * ((parent.height - 16) / count)
-                    height: Math.max(1, (parent.height - 16) / count - 4)
-                    radius: Math.max(4, root.cornerRadius - 4)
-                    color: root.alphaColor(Kirigami.Theme.highlightColor, 0.34)
-                    border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.95)
-                    border.width: 2
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    y: Math.max(6, Math.min(
+                        parent.height - height - 6,
+                        root.insertionY - root.workArea.y - height / 2))
+                    height: 8
+                    radius: 4
+                    color: Kirigami.Theme.highlightColor
+                    border.color: root.alphaColor(Kirigami.Theme.highlightedTextColor, 0.85)
+                    border.width: 1
                 }
             }
 
@@ -421,17 +420,22 @@ Item {
                 Behavior on color { ColorAnimation { duration: 110 } }
 
                 Rectangle {
-                    visible: root.activeZone === "right" && root.activeSlot >= 0
+                    visible: root.activeZone === "right" &&
+                             root.activeSlot >= 0 &&
+                             root.rightWindowCount > 0 &&
+                             root.insertionY >= root.workArea.y
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.margins: 8
-                    readonly property int count: Math.max(1, root.rightWindowCount + 1)
-                    y: 8 + root.activeSlot * ((parent.height - 16) / count)
-                    height: Math.max(1, (parent.height - 16) / count - 4)
-                    radius: Math.max(4, root.cornerRadius - 4)
-                    color: root.alphaColor(Kirigami.Theme.highlightColor, 0.34)
-                    border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.95)
-                    border.width: 2
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    y: Math.max(6, Math.min(
+                        parent.height - height - 6,
+                        root.insertionY - root.workArea.y - height / 2))
+                    height: 8
+                    radius: 4
+                    color: Kirigami.Theme.highlightColor
+                    border.color: root.alphaColor(Kirigami.Theme.highlightedTextColor, 0.85)
+                    border.width: 1
                 }
             }
 
@@ -454,17 +458,53 @@ Item {
                         height: 44
                         anchors.horizontalCenter: parent.horizontalCenter
 
-                        Rectangle {
+                        Item {
                             x: 0
                             y: 0
                             width: 30
                             height: parent.height
-                            radius: 5
-                            color: root.alphaColor(
-                                Kirigami.Theme.highlightColor,
-                                root.activeZone === "left" ? 0.80 : 0.14)
-                            border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.9)
-                            border.width: root.activeZone === "left" ? 2 : 1
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 5
+                                color: root.alphaColor(
+                                    Kirigami.Theme.highlightColor,
+                                    root.activeZone === "left" ? 0.24 : 0.08)
+                                border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.75)
+                                border.width: root.activeZone === "left" ? 2 : 1
+                            }
+
+                            Repeater {
+                                model: Math.max(1, root.leftWindowCount)
+                                Rectangle {
+                                    required property int index
+                                    x: 4
+                                    width: parent.width - 8
+                                    readonly property int count: Math.max(1, root.leftWindowCount)
+                                    y: 4 + index * ((parent.height - 8) / count)
+                                    height: Math.max(2, (parent.height - 8) / count - 2)
+                                    radius: 2
+                                    color: root.alphaColor(Kirigami.Theme.textColor, 0.18)
+                                }
+                            }
+
+                            Repeater {
+                                model: root.leftWindowCount + 1
+                                Rectangle {
+                                    required property int index
+                                    visible: root.leftWindowCount > 0
+                                    x: 3
+                                    width: parent.width - 6
+                                    height: root.activeZone === "left" && root.activeSlot === index ? 3 : 1
+                                    y: root.leftWindowCount > 0
+                                        ? Math.min(parent.height - height,
+                                            index * (parent.height / root.leftWindowCount))
+                                        : parent.height / 2
+                                    color: root.activeZone === "left" && root.activeSlot === index
+                                        ? Kirigami.Theme.highlightColor
+                                        : root.alphaColor(Kirigami.Theme.highlightColor, 0.35)
+                                }
+                            }
                         }
 
                         Rectangle {
@@ -475,22 +515,58 @@ Item {
                             radius: 5
                             color: root.alphaColor(
                                 Kirigami.Theme.highlightColor,
-                                root.activeZone === "master" ? 0.80 : 0.14)
+                                root.activeZone === "master" ? 0.72 : 0.10)
                             border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.9)
                             border.width: root.activeZone === "master" ? 2 : 1
                         }
 
-                        Rectangle {
+                        Item {
                             x: 78
                             y: 0
-                            width: 34
+                            width: 30
                             height: parent.height
-                            radius: 5
-                            color: root.alphaColor(
-                                Kirigami.Theme.highlightColor,
-                                root.activeZone === "right" ? 0.80 : 0.14)
-                            border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.9)
-                            border.width: root.activeZone === "right" ? 2 : 1
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 5
+                                color: root.alphaColor(
+                                    Kirigami.Theme.highlightColor,
+                                    root.activeZone === "right" ? 0.24 : 0.08)
+                                border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.75)
+                                border.width: root.activeZone === "right" ? 2 : 1
+                            }
+
+                            Repeater {
+                                model: Math.max(1, root.rightWindowCount)
+                                Rectangle {
+                                    required property int index
+                                    x: 4
+                                    width: parent.width - 8
+                                    readonly property int count: Math.max(1, root.rightWindowCount)
+                                    y: 4 + index * ((parent.height - 8) / count)
+                                    height: Math.max(2, (parent.height - 8) / count - 2)
+                                    radius: 2
+                                    color: root.alphaColor(Kirigami.Theme.textColor, 0.18)
+                                }
+                            }
+
+                            Repeater {
+                                model: root.rightWindowCount + 1
+                                Rectangle {
+                                    required property int index
+                                    visible: root.rightWindowCount > 0
+                                    x: 3
+                                    width: parent.width - 6
+                                    height: root.activeZone === "right" && root.activeSlot === index ? 3 : 1
+                                    y: root.rightWindowCount > 0
+                                        ? Math.min(parent.height - height,
+                                            index * (parent.height / root.rightWindowCount))
+                                        : parent.height / 2
+                                    color: root.activeZone === "right" && root.activeSlot === index
+                                        ? Kirigami.Theme.highlightColor
+                                        : root.alphaColor(Kirigami.Theme.highlightColor, 0.35)
+                                }
+                            }
                         }
                     }
 
