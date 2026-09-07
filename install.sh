@@ -3,14 +3,20 @@ set -euo pipefail
 
 ID="org.d4vtz.centermaster"
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+DEST="$HOME/.local/share/kwin/scripts/$ID"
 
-is_installed() {
-    kpackagetool6 --type=KWin/Script --list 2>/dev/null | grep -Fq "$ID"
-}
-
-if is_installed; then
-    kpackagetool6 --type=KWin/Script -u "$ID" || true
+# kpackagetool6 puede perder la pista del paquete aunque el directorio siga
+# existiendo. En ese estado, desinstalar falla y reinstalar también. Así que
+# tratamos el directorio instalado como la fuente de verdad para una
+# reinstalación local.
+if [[ -d "$DEST" ]]; then
+    echo "Eliminando instalación anterior en $DEST"
+    rm -rf -- "$DEST"
 fi
+
+# Limpiar una posible entrada registrada, pero no abortar si kpackagetool6
+# considera que el complemento ya no está instalado.
+kpackagetool6 --type=KWin/Script -u "$ID" >/dev/null 2>&1 || true
 
 kpackagetool6 --type=KWin/Script -i "$ROOT"
 kwriteconfig6 --file kwinrc --group Plugins --key "${ID}Enabled" true
