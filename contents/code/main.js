@@ -21,32 +21,40 @@ function parseRuleList(value) {
         .filter(v => v.length > 0);
 }
 
-const Config = {
-    outerGap: Number(readConfig("outerGap", 8)),
-    innerGap: Number(readConfig("innerGap", 8)),
-    smartGaps: readBool("smartGaps", false),
+let Config = null;
 
-    dualMasterRatio: Number(readConfig("dualMasterRatio", 0.67)),
-    centerMasterRatio: Number(readConfig("centerMasterRatio", 0.40)),
-    minMasterRatio: Number(readConfig("minMasterRatio", 0.30)),
-    maxMasterRatio: Number(readConfig("maxMasterRatio", 0.70)),
-    ratioStep: Number(readConfig("ratioStep", 0.05)),
-    verticalResizeStep: Number(readConfig("verticalResizeStep", 0.10)),
-    minStackWeight: Number(readConfig("minStackWeight", 0.20)),
+function buildConfig(raw) {
+    return {
+        outerGap: Number(raw.outerGap),
+        innerGap: Number(raw.innerGap),
+        smartGaps: Boolean(raw.smartGaps),
 
-    focusWrap: readBool("focusWrap", false),
-    insertionPolicy: String(readConfig("insertionPolicy", "balanced")).toLowerCase(),
+        dualMasterRatio: Number(raw.dualMasterRatio),
+        centerMasterRatio: Number(raw.centerMasterRatio),
+        minMasterRatio: Number(raw.minMasterRatio),
+        maxMasterRatio: Number(raw.maxMasterRatio),
+        ratioStep: Number(raw.ratioStep),
+        verticalResizeStep: Number(raw.verticalResizeStep),
+        minStackWeight: Number(raw.minStackWeight),
 
-    enableDragReassign: readBool("enableDragReassign", true),
-    showDragHighlight: readBool("showDragHighlight", true),
-    dropZoneRatio: Number(readConfig("dropZoneRatio", 0.30)),
+        focusWrap: Boolean(raw.focusWrap),
+        insertionPolicy: String(raw.insertionPolicy || "balanced").toLowerCase(),
 
-    floatingApps: parseRuleList(readConfig("floatingApps", "")),
-    ignoredApps: parseRuleList(readConfig("ignoredApps", "")),
-    tiledApps: parseRuleList(readConfig("tiledApps", "")),
+        enableDragReassign: Boolean(raw.enableDragReassign),
+        showDragHighlight: Boolean(raw.showDragHighlight),
+        dropZoneRatio: Number(raw.dropZoneRatio),
 
-    debug: readBool("debug", false)
-};
+        floatingApps: parseRuleList(raw.floatingApps || ""),
+        ignoredApps: parseRuleList(raw.ignoredApps || ""),
+        tiledApps: parseRuleList(raw.tiledApps || ""),
+
+        debug: Boolean(raw.debug)
+    };
+}
+
+let workspace = null;
+let KWinApi = null;
+let controller = null;
 
 function log() {
     if (!Config.debug) return;
@@ -987,7 +995,7 @@ class Controller {
         if (!state || !state.master) return;
 
         const area = workspace.clientArea(
-            KWin.WorkArea,
+            KWinApi.WorkArea,
             state.output,
             state.desktop
         );
@@ -1310,7 +1318,7 @@ class Controller {
         }
 
         const area = workspace.clientArea(
-            KWin.WorkArea,
+            KWinApi.WorkArea,
             state.output,
             state.desktop
         );
@@ -1378,7 +1386,7 @@ class Controller {
         if (!state) return;
 
         const area = workspace.clientArea(
-            KWin.WorkArea,
+            KWinApi.WorkArea,
             state.output,
             state.desktop
         );
@@ -1464,35 +1472,9 @@ class Controller {
     }
 }
 
-const controller = new Controller();
 
-function registerShortcuts() {
-    registerShortcut("CenterMasterFocusLeft", "Center Master: Focus left", "Meta+H", () => controller.focusLeft());
-    registerShortcut("CenterMasterFocusDown", "Center Master: Focus down", "Meta+J", () => controller.focusDown());
-    registerShortcut("CenterMasterFocusUp", "Center Master: Focus up", "Meta+K", () => controller.focusUp());
-    registerShortcut("CenterMasterFocusRight", "Center Master: Focus right", "Meta+L", () => controller.focusRight());
-
-    registerShortcut("CenterMasterMoveLeft", "Center Master: Move to left stack", "Meta+Shift+H", () => controller.moveLeft());
-    registerShortcut("CenterMasterMoveDown", "Center Master: Move down", "Meta+Shift+J", () => controller.moveDown());
-    registerShortcut("CenterMasterMoveUp", "Center Master: Move up", "Meta+Shift+K", () => controller.moveUp());
-    registerShortcut("CenterMasterMoveRight", "Center Master: Move to right stack", "Meta+Shift+L", () => controller.moveRight());
-
-    registerShortcut("CenterMasterPromote", "Center Master: Promote to master", "Meta+Return", () => controller.promoteActive());
-    registerShortcut("CenterMasterFloat", "Center Master: Toggle floating", "Meta+Space", () => controller.toggleFloating());
-    registerShortcut("CenterMasterMonocle", "Center Master: Toggle monocle", "Meta+M", () => controller.toggleMonocle());
-    registerShortcut("CenterMasterReflow", "Center Master: Reflow current layout", "Meta+R", () => controller.reflowActive());
-
-    registerShortcut("CenterMasterSecondaryGrow", "Center Master: Grow secondary window", "Meta+Ctrl+K", () => controller.resizeSecondary(Config.verticalResizeStep));
-    registerShortcut("CenterMasterSecondaryShrink", "Center Master: Shrink secondary window", "Meta+Ctrl+J", () => controller.resizeSecondary(-Config.verticalResizeStep));
-    registerShortcut("CenterMasterSecondaryReset", "Center Master: Reset secondary stack weights", "Meta+Ctrl+Backspace", () => controller.resetSecondaryWeights());
-
-    registerShortcut("CenterMasterShrink", "Center Master: Shrink master", "Meta+-", () => controller.resizeMaster(-Config.ratioStep));
-    registerShortcut("CenterMasterGrow", "Center Master: Grow master", "Meta+=", () => controller.resizeMaster(Config.ratioStep));
-    registerShortcut("CenterMasterResetRatio", "Center Master: Reset ratios", "Meta+0", () => controller.resetRatios());
-}
 
 function bootstrap() {
-    registerShortcuts();
 
     workspace.windowAdded.connect(window => controller.addWindow(window));
     workspace.windowRemoved.connect(window => controller.removeWindow(window));
@@ -1527,4 +1509,45 @@ function bootstrap() {
     );
 }
 
-bootstrap();
+
+function initialize(workspaceObject, kwinObject, rawConfig) {
+    workspace = workspaceObject;
+    KWinApi = kwinObject;
+    Config = buildConfig(rawConfig);
+
+    controller = new Controller();
+    bootstrap();
+
+    log("initialized from declarative package");
+}
+
+function focusLeft() { if (controller) controller.focusLeft(); }
+function focusDown() { if (controller) controller.focusDown(); }
+function focusUp() { if (controller) controller.focusUp(); }
+function focusRight() { if (controller) controller.focusRight(); }
+
+function moveLeft() { if (controller) controller.moveLeft(); }
+function moveDown() { if (controller) controller.moveDown(); }
+function moveUp() { if (controller) controller.moveUp(); }
+function moveRight() { if (controller) controller.moveRight(); }
+
+function promoteActive() { if (controller) controller.promoteActive(); }
+function toggleFloating() { if (controller) controller.toggleFloating(); }
+function toggleMonocle() { if (controller) controller.toggleMonocle(); }
+function reflowActive() { if (controller) controller.reflowActive(); }
+
+function secondaryGrow() {
+    if (controller && Config) controller.resizeSecondary(Config.verticalResizeStep);
+}
+function secondaryShrink() {
+    if (controller && Config) controller.resizeSecondary(-Config.verticalResizeStep);
+}
+function secondaryReset() { if (controller) controller.resetSecondaryWeights(); }
+
+function shrinkMaster() {
+    if (controller && Config) controller.resizeMaster(-Config.ratioStep);
+}
+function growMaster() {
+    if (controller && Config) controller.resizeMaster(Config.ratioStep);
+}
+function resetRatios() { if (controller) controller.resetRatios(); }
