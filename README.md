@@ -85,7 +85,9 @@ The first tiled window on an empty output + desktop always becomes MASTER.
 
 ## Drag and drop
 
-When enabled, dragging a tiled window and releasing it reassigns it according to the horizontal drop zone:
+When enabled, dragging a tiled window shows a native KWin outline for the current target zone. The outline updates continuously while the window moves, so the destination is visible before releasing it.
+
+The target is resolved according to the horizontal drop zone:
 
 - left edge -> LEFT stack
 - center -> MASTER
@@ -173,6 +175,7 @@ Implemented:
 - explicit reflow
 - drag/drop zone reassignment
 - per-application floating/ignored/tiled rules
+- native visual drag/drop target highlighting
 - graphical configuration UI
 - WorkArea-aware geometry
 - automated layout-core tests and CI
