@@ -21,6 +21,7 @@
     <entry name="insertionPolicy" type="String"><default>balanced</default></entry>
 
     <entry name="enableDragReassign" type="Bool"><default>true</default></entry>
+    <entry name="showDragHighlight" type="Bool"><default>true</default></entry>
     <entry name="dropZoneRatio" type="Double"><default>0.30</default></entry>
 
     <entry name="floatingApps" type="String"><default></default></entry>
