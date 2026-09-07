@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="outerGap" type="Int"><default>8</default></entry>
+    <entry name="innerGap" type="Int"><default>8</default></entry>
+    <entry name="smartGaps" type="Bool"><default>false</default></entry>
+    <entry name="dualMasterRatio" type="Double"><default>0.67</default></entry>
+    <entry name="centerMasterRatio" type="Double"><default>0.40</default></entry>
+    <entry name="minMasterRatio" type="Double"><default>0.30</default></entry>
+    <entry name="maxMasterRatio" type="Double"><default>0.70</default></entry>
+    <entry name="ratioStep" type="Double"><default>0.05</default></entry>
+    <entry name="debug" type="Bool"><default>true</default></entry>
+  </group>
+</kcfg>
