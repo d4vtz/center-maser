@@ -1,4 +1,4 @@
-# Center Master v0.4.2
+# Center Master v0.5.0
 
 KWin/Plasma 6 automatic tiling script with a stable centered master and two secondary stacks.
 
@@ -85,7 +85,12 @@ The first tiled window on an empty output + desktop always becomes MASTER.
 
 ## Drag and drop
 
-When enabled, dragging a tiled window shows a native KWin outline for the current target zone. The outline updates continuously while the window moves, so the destination is visible before releasing it.
+When enabled, dragging a tiled window now uses two complementary visual layers:
+
+- a KZones-style full-screen overlay that shows LEFT / MASTER / RIGHT simultaneously and highlights the zone under the cursor;
+- KWin's native outline, retained as the precise insertion preview inside the selected secondary stack.
+
+The overlay is a separate declarative KWin companion script so the existing JavaScript tiling engine remains the single authority for layout state and drop behavior.
 
 The target is resolved according to the horizontal drop zone:
 
@@ -117,6 +122,7 @@ System Settings -> Window Management -> KWin Scripts -> Center Master -> Configu
 - optional focus wrap
 - insertion policy
 - drag/drop reassignment and edge-zone width
+- KZones-style overlay enablement, opacity, corner radius and visual gap
 - per-application rules
 - debug logging
 
@@ -175,14 +181,14 @@ Implemented:
 - explicit reflow
 - drag/drop zone reassignment
 - per-application floating/ignored/tiled rules
-- native visual drag/drop target highlighting
+- native precise drag/drop insertion highlighting
+- KZones-style LEFT / MASTER / RIGHT drag overlay
 - graphical configuration UI
 - WorkArea-aware geometry
 - automated layout-core tests and CI
 
 Still intentionally deferred:
 
-- visual drag/drop overlay
 - persistent per-desktop layout state across KWin restarts
 - alternate layouts such as dwindle or traditional master-stack
 
@@ -257,3 +263,23 @@ Because Aurorae border thickness is baked into the generated SVG, after changing
 ```
 
 The installer reads the values from KWin's `Script-org.d4vtz.centermaster` configuration group, reclones the original Aurorae decoration, reapplies only the inner border, and reloads KWin.
+
+
+### v0.5.0 KZones-style drag overlay
+
+Center Master keeps the existing linear `master + left[] + right[]` state model. No binary tree was introduced.
+
+The visual drag system is split deliberately:
+
+1. `org.d4vtz.centermaster` continues to own state, reassignment and exact stack insertion.
+2. `org.d4vtz.centermaster.overlay` is a declarative KWin script that only renders the three drop regions.
+
+This prevents the visual layer from becoming a second tiling engine. The overlay follows the KDE highlight/accent color through Kirigami and is click-through (`outputOnly`), so it never steals the interactive move.
+
+The companion overlay reads mirrored settings. Because it is a separate KWin package, rerun:
+
+```bash
+./install.sh
+```
+
+after changing overlay-specific appearance settings so the installer synchronizes them to the companion script.
