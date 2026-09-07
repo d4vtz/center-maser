@@ -25,6 +25,15 @@ if [[ -d "$AURORAE_SRC" ]]; then
     rm -rf -- "$AURORAE_DEST"
     cp -a -- "$AURORAE_SRC" "$AURORAE_DEST"
 
+    # El marco y los botones usan roles ColorScheme-* en SVG y siguen el
+    # esquema de KDE. Aurorae aún espera el color del texto del título en su
+    # archivo rc, así que lo sincronizamos con kdeglobals al instalar.
+    title_rgb="$(kreadconfig6 --file kdeglobals --group Colors:Window --key ForegroundNormal 2>/dev/null || true)"
+    if [[ "$title_rgb" =~ ^[0-9]+,[0-9]+,[0-9]+$ ]]; then
+        sed -i "s/^ActiveTextColor=.*/ActiveTextColor=${title_rgb},255/"             "$AURORAE_DEST/CenterMasterAccentrc"
+        sed -i "s/^InactiveTextColor=.*/InactiveTextColor=${title_rgb},170/"             "$AURORAE_DEST/CenterMasterAccentrc"
+    fi
+
     mkdir -p "$DECORATION_BACKUP_DIR"
 
     if [[ ! -f "$DECORATION_BACKUP" ]]; then
