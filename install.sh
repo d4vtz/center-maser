@@ -5,21 +5,45 @@ ID="org.d4vtz.centermaster"
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DEST="$HOME/.local/share/kwin/scripts/$ID"
 
-# kpackagetool6 puede perder la pista del paquete aunque el directorio siga
-# existiendo. En ese estado, desinstalar falla y reinstalar también. Así que
-# tratamos el directorio instalado como la fuente de verdad para una
-# reinstalación local.
+AURORAE_NAME="CenterMasterAccent"
+AURORAE_SRC="$ROOT/aurorae/$AURORAE_NAME"
+AURORAE_DEST="$HOME/.local/share/aurorae/themes/$AURORAE_NAME"
+DECORATION_BACKUP_DIR="$HOME/.config/center-master"
+DECORATION_BACKUP="$DECORATION_BACKUP_DIR/decoration-backup.conf"
+
 if [[ -d "$DEST" ]]; then
     echo "Eliminando instalación anterior en $DEST"
     rm -rf -- "$DEST"
 fi
 
-# Limpiar una posible entrada registrada, pero no abortar si kpackagetool6
-# considera que el complemento ya no está instalado.
 kpackagetool6 --type=KWin/Script -u "$ID" >/dev/null 2>&1 || true
-
 kpackagetool6 --type=KWin/Script -i "$ROOT"
 kwriteconfig6 --file kwinrc --group Plugins --key "${ID}Enabled" true
+
+if [[ -d "$AURORAE_SRC" ]]; then
+    mkdir -p "$(dirname -- "$AURORAE_DEST")"
+    rm -rf -- "$AURORAE_DEST"
+    cp -a -- "$AURORAE_SRC" "$AURORAE_DEST"
+
+    mkdir -p "$DECORATION_BACKUP_DIR"
+
+    if [[ ! -f "$DECORATION_BACKUP" ]]; then
+        current_library="$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key library 2>/dev/null || true)"
+        current_theme="$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme 2>/dev/null || true)"
+
+        {
+            printf 'library=%s\n' "$current_library"
+            printf 'theme=%s\n' "$current_theme"
+        } > "$DECORATION_BACKUP"
+
+        echo "Decoración anterior guardada en $DECORATION_BACKUP"
+    fi
+
+    kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key library org.kde.kwin.aurorae
+    kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme "__aurorae__svg__${AURORAE_NAME}"
+
+    echo "Decoración Center Master Accent instalada y aplicada."
+fi
 
 if command -v qdbus6 >/dev/null 2>&1; then
     qdbus6 org.kde.KWin /KWin reconfigure
