@@ -38,6 +38,7 @@ const Config = {
     insertionPolicy: String(readConfig("insertionPolicy", "balanced")).toLowerCase(),
 
     enableDragReassign: readBool("enableDragReassign", true),
+    showDragHighlight: readBool("showDragHighlight", true),
     dropZoneRatio: Number(readConfig("dropZoneRatio", 0.30)),
 
     floatingApps: parseRuleList(readConfig("floatingApps", "")),
@@ -786,6 +787,33 @@ class Controller {
 
                 managed.userMoving = Boolean(window.move);
                 managed.userResizing = Boolean(window.resize);
+
+                if (
+                    managed.userMoving &&
+                    managed.mode === "tiled" &&
+                    Config.enableDragReassign &&
+                    Config.showDragHighlight
+                ) {
+                    this.updateDragHighlight(window, window.frameGeometry);
+                }
+            });
+        }
+
+        if (window.interactiveMoveResizeStepped) {
+            window.interactiveMoveResizeStepped.connect(geometry => {
+                const managed = this.managed.get(key);
+
+                if (
+                    !managed ||
+                    !managed.userMoving ||
+                    managed.mode !== "tiled" ||
+                    !Config.enableDragReassign ||
+                    !Config.showDragHighlight
+                ) {
+                    return;
+                }
+
+                this.updateDragHighlight(window, geometry);
             });
         }
 
@@ -799,6 +827,10 @@ class Controller {
 
                 managed.userMoving = false;
                 managed.userResizing = false;
+
+                if (Config.showDragHighlight) {
+                    hideOutline();
+                }
 
                 if (
                     wasMoving &&
@@ -1203,6 +1235,106 @@ class Controller {
         c.state.focus(c.window);
     }
 
+    dropZoneForGeometry(geometry, area) {
+        const centerX = geometry.x + geometry.width / 2;
+        const relativeX = clamp(
+            (centerX - area.x) / Math.max(1, area.width),
+            0,
+            1
+        );
+
+        const edge = clamp(Config.dropZoneRatio, 0.15, 0.45);
+
+        if (relativeX < edge) return "left";
+        if (relativeX > 1 - edge) return "right";
+        return "master";
+    }
+
+    dragHighlightGeometry(zone, geometry, state, area) {
+        const inner = Config.innerGap;
+        const outer = Config.outerGap;
+        const base = {
+            x: area.x + outer,
+            y: area.y + outer,
+            width: Math.max(1, area.width - outer * 2),
+            height: Math.max(1, area.height - outer * 2)
+        };
+
+        const edge = clamp(Config.dropZoneRatio, 0.15, 0.45);
+
+        if (zone === "master") {
+            const leftWidth = base.width * edge;
+            const rightWidth = base.width * edge;
+
+            return makeRect(
+                base.x + leftWidth + inner,
+                base.y,
+                Math.max(1, base.width - leftWidth - rightWidth - inner * 2),
+                base.height
+            );
+        }
+
+        const stack = zone === "left" ? state.left : state.right;
+        const filtered = stack.filter(w => w !== geometry.__window);
+        const centerY = geometry.y + geometry.height / 2;
+        const index = this.stackIndexForDrop(filtered, centerY, base);
+
+        const zoneWidth = Math.max(1, base.width * edge - inner);
+        const x = zone === "left"
+            ? base.x
+            : base.x + base.width - zoneWidth;
+
+        const count = filtered.length + 1;
+        const totalGap = inner * Math.max(0, count - 1);
+        const slotHeight = Math.max(1, (base.height - totalGap) / count);
+
+        return makeRect(
+            x,
+            base.y + index * (slotHeight + inner),
+            zoneWidth,
+            slotHeight
+        );
+    }
+
+    updateDragHighlight(window, geometry) {
+        const managed = this.managed.get(this.windowKey(window));
+        if (!managed || !managed.workspaceKey) {
+            hideOutline();
+            return;
+        }
+
+        const state = this.states.get(managed.workspaceKey);
+        if (!state) {
+            hideOutline();
+            return;
+        }
+
+        const area = workspace.clientArea(
+            KWin.WorkArea,
+            state.output,
+            state.desktop
+        );
+
+        const zone = this.dropZoneForGeometry(geometry, area);
+
+        const geometryWithWindow = {
+            x: geometry.x,
+            y: geometry.y,
+            width: geometry.width,
+            height: geometry.height,
+            __window: window
+        };
+
+        const highlight = this.dragHighlightGeometry(
+            zone,
+            geometryWithWindow,
+            state,
+            area
+        );
+
+        showOutline(highlight);
+    }
+
     stackIndexForDrop(stack, centerY, area) {
         if (!stack.length) return 0;
 
@@ -1241,21 +1373,8 @@ class Controller {
 
         const geometry = window.frameGeometry;
 
-        const centerX = geometry.x + geometry.width / 2;
         const centerY = geometry.y + geometry.height / 2;
-
-        const relativeX = clamp(
-            (centerX - area.x) / Math.max(1, area.width),
-            0,
-            1
-        );
-
-        const edge = clamp(Config.dropZoneRatio, 0.15, 0.45);
-
-        let zone = "master";
-
-        if (relativeX < edge) zone = "left";
-        else if (relativeX > 1 - edge) zone = "right";
+        const zone = this.dropZoneForGeometry(geometry, area);
 
         let index = 0;
 
