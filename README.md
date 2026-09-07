@@ -1,4 +1,4 @@
-# Center Master v0.5.0
+# Center Master v0.6.0
 
 KWin/Plasma 6 automatic tiling script with a stable centered master and two secondary stacks.
 
@@ -90,7 +90,7 @@ When enabled, dragging a tiled window now uses two complementary visual layers:
 - a KZones-style full-screen overlay that shows LEFT / MASTER / RIGHT simultaneously and highlights the zone under the cursor;
 - KWin's native outline, retained as the precise insertion preview inside the selected secondary stack.
 
-The overlay is a separate declarative KWin companion script so the existing JavaScript tiling engine remains the single authority for layout state and drop behavior.
+The overlay and the tiling engine now live in the same KWin package. QML renders the visual layer while the internal JavaScript module remains the single authority for layout state and drop behavior.
 
 The target is resolved according to the horizontal drop zone:
 
@@ -265,25 +265,23 @@ Because Aurorae border thickness is baked into the generated SVG, after changing
 The installer reads the values from KWin's `Script-org.d4vtz.centermaster` configuration group, reclones the original Aurorae decoration, reapplies only the inner border, and reloads KWin.
 
 
-### v0.5.0 KZones-style drag overlay
+### v0.6.0 integrated Plasma drag overlay
 
-Center Master keeps the existing linear `master + left[] + right[]` state model. No binary tree was introduced.
+Center Master is again a single KWin script package: `org.d4vtz.centermaster`.
 
-The visual drag system is split deliberately:
+The package uses a declarative QML entry point so it can render the drag overlay, while the existing JavaScript center-master engine is imported internally. There is no second plugin to enable and no second tiling state.
 
-1. `org.d4vtz.centermaster` continues to own state, reassignment and exact stack insertion.
-2. `org.d4vtz.centermaster.overlay` is a declarative KWin script that only renders the three drop regions.
+During a window drag:
 
-This prevents the visual layer from becoming a second tiling engine. The overlay follows the KDE highlight/accent color through Kirigami and is click-through (`outputOnly`), so it never steals the interactive move.
+- LEFT, MASTER and RIGHT are tinted with Plasma's current `highlightColor`;
+- the region under the pointer receives the strongest accent fill and border;
+- LEFT and RIGHT expose vertical insertion slots;
+- a compact card appears in the center of the work area with a three-column diagram and a context message such as "Soltar como ventana principal";
+- KWin's native outline can still be kept enabled as the precise insertion preview.
 
-The companion overlay reads mirrored settings. Because it is a separate KWin package, rerun:
+The center card uses Plasma theme roles for its background and text, so light, dark and custom color schemes remain coherent.
 
-```bash
-./install.sh
-```
-
-after changing overlay-specific appearance settings so the installer synchronizes them to the companion script.
-
+Upgrading from v0.5 automatically removes the old `org.d4vtz.centermaster.overlay` companion package.
 
 ### Plasma-native zone visuals
 
