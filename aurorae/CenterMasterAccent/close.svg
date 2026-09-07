@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="30" viewBox="0 0 120 30">
+ <defs>
+  <style id="current-color-scheme" type="text/css">
+   .ColorScheme-Highlight { color:#3daee9; }
+   .ColorScheme-Text { color:#232629; }
+   .ColorScheme-Background { color:#eff0f1; }
+  </style>
+ </defs>
+
+ <g id="active-center" class="ColorScheme-Text" fill="currentColor" transform="translate(0,0)">
+  <path d="M8 8l8 8m0-8l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+ </g>
+
+ <g id="inactive-center" class="ColorScheme-Text" fill="currentColor" opacity="0.55" transform="translate(30,0)">
+  <path d="M8 8l8 8m0-8l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+ </g>
+
+ <g id="hover-center" class="ColorScheme-Highlight" fill="currentColor" transform="translate(60,0)">
+  <rect x="2" y="2" width="22" height="22" rx="5" fill="currentColor" opacity="0.16"/>
+  <path d="M8 8l8 8m0-8l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+ </g>
+
+ <g id="pressed-center" class="ColorScheme-Highlight" fill="currentColor" transform="translate(90,0)">
+  <rect x="2" y="2" width="22" height="22" rx="5" fill="currentColor" opacity="0.28"/>
+  <path d="M8 8l8 8m0-8l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+ </g>
+</svg>
