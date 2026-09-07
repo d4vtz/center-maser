@@ -1,7 +1,7 @@
 "use strict";
 
 /*
- * Center Master v0.2
+ * Center Master v0.3
  * KWin / Plasma 6
  *
  * State is authoritative. Geometry is only a projection of state.
@@ -31,6 +31,11 @@ const Config = {
     minMasterRatio: Number(readConfig("minMasterRatio", 0.30)),
     maxMasterRatio: Number(readConfig("maxMasterRatio", 0.70)),
     ratioStep: Number(readConfig("ratioStep", 0.05)),
+    verticalResizeStep: Number(readConfig("verticalResizeStep", 0.10)),
+    minStackWeight: Number(readConfig("minStackWeight", 0.20)),
+
+    focusWrap: readBool("focusWrap", false),
+    insertionPolicy: String(readConfig("insertionPolicy", "balanced")).toLowerCase(),
 
     enableDragReassign: readBool("enableDragReassign", true),
     dropZoneRatio: Number(readConfig("dropZoneRatio", 0.30)),
@@ -149,6 +154,27 @@ class WorkspaceState {
         this.centerMasterRatio = Config.centerMasterRatio;
 
         this.monocle = false;
+
+        // Peso vertical por ventana secundaria. El master no usa este valor.
+        this.weights = new Map();
+    }
+
+    weightOf(window) {
+        return this.weights.has(window) ? this.weights.get(window) : 1.0;
+    }
+
+    setWeight(window, weight) {
+        this.weights.set(window, Math.max(Config.minStackWeight, Number(weight) || 1.0));
+    }
+
+    ensureWeight(window) {
+        if (!this.weights.has(window)) this.weights.set(window, 1.0);
+    }
+
+    stackForZone(zone) {
+        if (zone === "left") return this.left;
+        if (zone === "right") return this.right;
+        return null;
     }
 
     tiledCount() {
@@ -173,8 +199,10 @@ class WorkspaceState {
         return null;
     }
 
-    add(window, preferredSlot) {
+    add(window, preferredSlot, focusedWindow) {
         if (!window || this.zoneOf(window)) return;
+
+        this.ensureWeight(window);
 
         if (!this.master) {
             this.master = window;
@@ -191,10 +219,25 @@ class WorkspaceState {
             return;
         }
 
-        let side;
-        if (this.left.length < this.right.length) side = "left";
-        else if (this.right.length < this.left.length) side = "right";
-        else side = this.nextSide;
+        let side = null;
+        const policy = Config.insertionPolicy;
+
+        if (policy === "left") {
+            side = "left";
+        } else if (policy === "right") {
+            side = "right";
+        } else if (policy === "focused-stack" && focusedWindow) {
+            const focusedSlot = this.zoneOf(focusedWindow);
+            if (focusedSlot && (focusedSlot.zone === "left" || focusedSlot.zone === "right")) {
+                side = focusedSlot.zone;
+            }
+        }
+
+        if (!side) {
+            if (this.left.length < this.right.length) side = "left";
+            else if (this.right.length < this.left.length) side = "right";
+            else side = this.nextSide;
+        }
 
         if (side === "left") {
             this.left.push(window);
@@ -294,6 +337,49 @@ class WorkspaceState {
 
         stack[target] = window;
         stack[slot.index] = other;
+        return true;
+    }
+
+    resizeSecondary(window, delta) {
+        const slot = this.zoneOf(window);
+        if (!slot || slot.zone === "master") return false;
+
+        const stack = this.stackForZone(slot.zone);
+        if (!stack || stack.length < 2) return false;
+
+        let neighborIndex = slot.index < stack.length - 1
+            ? slot.index + 1
+            : slot.index - 1;
+
+        if (neighborIndex < 0) return false;
+
+        const neighbor = stack[neighborIndex];
+
+        this.ensureWeight(window);
+        this.ensureWeight(neighbor);
+
+        const currentWeight = this.weightOf(window);
+        const neighborWeight = this.weightOf(neighbor);
+
+        const nextCurrent = currentWeight + delta;
+        const nextNeighbor = neighborWeight - delta;
+
+        if (
+            nextCurrent < Config.minStackWeight ||
+            nextNeighbor < Config.minStackWeight
+        ) {
+            return false;
+        }
+
+        this.setWeight(window, nextCurrent);
+        this.setWeight(neighbor, nextNeighbor);
+        return true;
+    }
+
+    resetSecondaryWeights(zone) {
+        const stack = this.stackForZone(zone);
+        if (!stack) return false;
+        for (const window of stack) this.setWeight(window, 1.0);
         return true;
     }
 
@@ -423,6 +509,13 @@ class WorkspaceState {
             throw new Error("Secondary windows exist without master");
         }
 
+        for (const window of this.left.concat(this.right)) {
+            const weight = this.weightOf(window);
+            if (!Number.isFinite(weight) || weight < Config.minStackWeight) {
+                throw new Error("Invalid stack weight");
+            }
+        }
+
         return true;
     }
 }
@@ -453,25 +546,37 @@ function insetWorkArea(workArea, effectiveCount) {
     };
 }
 
-function calculateStackRects(windows, area, gap) {
+function calculateStackRects(windows, area, gap, weightOf) {
     const result = [];
     const count = windows.length;
     if (!count) return result;
 
     const totalGap = gap * Math.max(0, count - 1);
     const available = Math.max(1, area.height - totalGap);
-    const height = available / count;
+
+    const weights = windows.map(window => {
+        const weight = weightOf ? Number(weightOf(window)) : 1.0;
+        return Math.max(Config.minStackWeight, Number.isFinite(weight) ? weight : 1.0);
+    });
+
+    const totalWeight = Math.max(0.0001, weights.reduce((sum, weight) => sum + weight, 0));
 
     let y = area.y;
+    let consumed = 0;
 
     for (let i = 0; i < count; ++i) {
-        const h = i === count - 1
-            ? area.y + area.height - y
-            : height;
+        let height;
+
+        if (i === count - 1) {
+            height = area.y + area.height - y;
+        } else {
+            height = available * (weights[i] / totalWeight);
+            consumed += height;
+        }
 
         result.push({
             window: windows[i],
-            rect: makeRect(area.x, y, area.width, h)
+            rect: makeRect(area.x, y, area.width, height)
         });
 
         y += height + gap;
@@ -542,7 +647,7 @@ function calculateLayout(state, workArea) {
                 window: state.master,
                 rect: makeRect(masterArea.x, masterArea.y, masterArea.width, masterArea.height)
             },
-            ...calculateStackRects(sideWindows, sideArea, inner)
+            ...calculateStackRects(sideWindows, sideArea, inner, window => state.weightOf(window))
         ];
     }
 
@@ -572,12 +677,12 @@ function calculateLayout(state, workArea) {
     };
 
     return [
-        ...calculateStackRects(state.left, leftArea, inner),
+        ...calculateStackRects(state.left, leftArea, inner, window => state.weightOf(window)),
         {
             window: state.master,
             rect: makeRect(masterArea.x, masterArea.y, masterArea.width, masterArea.height)
         },
-        ...calculateStackRects(state.right, rightArea, inner)
+        ...calculateStackRects(state.right, rightArea, inner, window => state.weightOf(window))
     ];
 }
 
@@ -733,7 +838,8 @@ class Controller {
             return;
         }
 
-        state.add(window);
+        const previousFocused = state.focused;
+        state.add(window, null, previousFocused);
         state.focus(window);
         state.validate();
 
@@ -884,6 +990,10 @@ class Controller {
             visibleState.dualMasterRatio = state.dualMasterRatio;
             visibleState.centerMasterRatio = state.centerMasterRatio;
 
+            for (const window of visibleState.left.concat(visibleState.right)) {
+                visibleState.setWeight(window, state.weightOf(window));
+            }
+
             layout = calculateLayout(visibleState, area);
         }
 
@@ -942,9 +1052,13 @@ class Controller {
 
         if (slot.zone === "master" && c.state.left.length) {
             target = this.closestVertical(c.window, c.state.left);
+        } else if (slot.zone === "right") {
+            target = c.state.master;
+        } else if (slot.zone === "left" && Config.focusWrap) {
+            target = c.state.right.length
+                ? this.closestVertical(c.window, c.state.right)
+                : c.state.master;
         }
-
-        if (slot.zone === "right") target = c.state.master;
 
         if (target) workspace.activeWindow = target;
     }
@@ -958,9 +1072,13 @@ class Controller {
 
         if (slot.zone === "master" && c.state.right.length) {
             target = this.closestVertical(c.window, c.state.right);
+        } else if (slot.zone === "left") {
+            target = c.state.master;
+        } else if (slot.zone === "right" && Config.focusWrap) {
+            target = c.state.left.length
+                ? this.closestVertical(c.window, c.state.left)
+                : c.state.master;
         }
-
-        if (slot.zone === "left") target = c.state.master;
 
         if (target) workspace.activeWindow = target;
     }
@@ -972,13 +1090,12 @@ class Controller {
         const slot = c.state.zoneOf(c.window);
         if (slot.zone === "master") return;
 
-        const stack =
-            slot.zone === "left"
-                ? c.state.left
-                : c.state.right;
+        const stack = slot.zone === "left" ? c.state.left : c.state.right;
 
         if (slot.index > 0) {
             workspace.activeWindow = stack[slot.index - 1];
+        } else if (Config.focusWrap && stack.length > 1) {
+            workspace.activeWindow = stack[stack.length - 1];
         }
     }
 
@@ -989,13 +1106,12 @@ class Controller {
         const slot = c.state.zoneOf(c.window);
         if (slot.zone === "master") return;
 
-        const stack =
-            slot.zone === "left"
-                ? c.state.left
-                : c.state.right;
+        const stack = slot.zone === "left" ? c.state.left : c.state.right;
 
         if (slot.index < stack.length - 1) {
             workspace.activeWindow = stack[slot.index + 1];
+        } else if (Config.focusWrap && stack.length > 1) {
+            workspace.activeWindow = stack[0];
         }
     }
 
@@ -1034,6 +1150,24 @@ class Controller {
 
     resizeMaster(delta) {
         this.mutateActive(state => state.resizeMaster(delta));
+    }
+
+    resizeSecondary(delta) {
+        this.mutateActive((state, window) => state.resizeSecondary(window, delta));
+    }
+
+    resetSecondaryWeights() {
+        const c = this.activeContext();
+        if (!c) return;
+
+        const slot = c.state.zoneOf(c.window);
+        if (!slot || slot.zone === "master") return;
+
+        if (c.state.resetSecondaryWeights(slot.zone)) {
+            this.relayout(c.state);
+            workspace.activeWindow = c.window;
+            c.state.focus(c.window);
+        }
     }
 
     resetRatios() {
@@ -1216,6 +1350,10 @@ function registerShortcuts() {
     registerShortcut("CenterMasterFloat", "Center Master: Toggle floating", "Meta+Space", () => controller.toggleFloating());
     registerShortcut("CenterMasterMonocle", "Center Master: Toggle monocle", "Meta+M", () => controller.toggleMonocle());
     registerShortcut("CenterMasterReflow", "Center Master: Reflow current layout", "Meta+R", () => controller.reflowActive());
+
+    registerShortcut("CenterMasterSecondaryGrow", "Center Master: Grow secondary window", "Meta+Ctrl+K", () => controller.resizeSecondary(Config.verticalResizeStep));
+    registerShortcut("CenterMasterSecondaryShrink", "Center Master: Shrink secondary window", "Meta+Ctrl+J", () => controller.resizeSecondary(-Config.verticalResizeStep));
+    registerShortcut("CenterMasterSecondaryReset", "Center Master: Reset secondary stack weights", "Meta+Ctrl+Backspace", () => controller.resetSecondaryWeights());
 
     registerShortcut("CenterMasterShrink", "Center Master: Shrink master", "Meta+-", () => controller.resizeMaster(-Config.ratioStep));
     registerShortcut("CenterMasterGrow", "Center Master: Grow master", "Meta+=", () => controller.resizeMaster(Config.ratioStep));
