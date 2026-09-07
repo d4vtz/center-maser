@@ -829,7 +829,7 @@ class Controller {
                 managed.userResizing = false;
 
                 if (Config.showDragHighlight) {
-                    hideOutline();
+                    this.hideDragHighlight();
                 }
 
                 if (
@@ -1299,13 +1299,13 @@ class Controller {
     updateDragHighlight(window, geometry) {
         const managed = this.managed.get(this.windowKey(window));
         if (!managed || !managed.workspaceKey) {
-            hideOutline();
+            this.hideDragHighlight();
             return;
         }
 
         const state = this.states.get(managed.workspaceKey);
         if (!state) {
-            hideOutline();
+            workspace.hideOutline();
             return;
         }
 
@@ -1332,7 +1332,19 @@ class Controller {
             area
         );
 
-        showOutline(highlight);
+        try {
+            workspace.showOutline(highlight);
+        } catch (error) {
+            log("showOutline failed:", error);
+        }
+    }
+
+    hideDragHighlight() {
+        try {
+            workspace.hideOutline();
+        } catch (error) {
+            log("hideOutline failed:", error);
+        }
     }
 
     stackIndexForDrop(stack, centerY, area) {
