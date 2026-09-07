@@ -183,11 +183,15 @@ install_center_master_script
 install_accent_decoration
 
 if command -v qdbus6 >/dev/null 2>&1; then
+    qdbus6 org.kde.KWin /Scripting unloadScript "$ID" >/dev/null 2>&1 || true
     qdbus6 org.kde.KWin /KWin reconfigure
+    qdbus6 org.kde.KWin /Scripting start >/dev/null 2>&1 || true
 elif command -v qdbus >/dev/null 2>&1; then
+    qdbus org.kde.KWin /Scripting unloadScript "$ID" >/dev/null 2>&1 || true
     qdbus org.kde.KWin /KWin reconfigure
+    qdbus org.kde.KWin /Scripting start >/dev/null 2>&1 || true
 else
-    echo "Advertencia: no se encontró qdbus6 ni qdbus; recarga KWin manualmente."
+    echo "Advertencia: no se encontró qdbus6 ni qdbus; vuelve a iniciar sesión para recargar Center Master."
 fi
 
 echo "Center Master instalado y habilitado como un único script."
