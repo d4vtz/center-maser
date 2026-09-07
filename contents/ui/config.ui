@@ -25,6 +25,63 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="behaviorGroup">
+     <property name="title"><string>Comportamiento</string></property>
+     <layout class="QFormLayout" name="behaviorLayout">
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="kcfg_focusWrap">
+        <property name="text"><string>Navegación circular al llegar al borde</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="insertionPolicyLabel">
+        <property name="text"><string>Inserción de ventanas nuevas:</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="kcfg_insertionPolicy">
+        <item><property name="text"><string>balanced</string></property></item>
+        <item><property name="text"><string>right</string></property></item>
+        <item><property name="text"><string>left</string></property></item>
+        <item><property name="text"><string>focused-stack</string></property></item>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="verticalResizeStepLabel">
+        <property name="text"><string>Paso de resize vertical:</string></property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="kcfg_verticalResizeStep">
+        <property name="decimals"><number>2</number></property>
+        <property name="minimum"><double>0.010000000000000</double></property>
+        <property name="maximum"><double>0.500000000000000</double></property>
+        <property name="singleStep"><double>0.010000000000000</double></property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="minStackWeightLabel">
+        <property name="text"><string>Peso vertical mínimo:</string></property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QDoubleSpinBox" name="kcfg_minStackWeight">
+        <property name="decimals"><number>2</number></property>
+        <property name="minimum"><double>0.050000000000000</double></property>
+        <property name="maximum"><double>1.000000000000000</double></property>
+        <property name="singleStep"><double>0.050000000000000</double></property>
+       </widget>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QLabel" name="behaviorHelp">
+        <property name="wordWrap"><bool>true</bool></property>
+        <property name="text"><string>balanced mantiene ambas pilas equilibradas; right/left fuerzan nuevas secundarias a ese lado; focused-stack usa la misma pila que la ventana enfocada cuando es posible.</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="dragGroup">
      <property name="title"><string>Arrastrar ventanas</string></property>
      <layout class="QFormLayout" name="dragLayout">
