@@ -25,6 +25,56 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="appearanceGroup">
+     <property name="title"><string>Apariencia de bordes</string></property>
+     <layout class="QFormLayout" name="appearanceLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="activeBorderWidthLabel">
+        <property name="text"><string>Borde activo:</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSpinBox" name="kcfg_activeBorderWidth">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>12</number></property>
+        <property name="suffix"><string> px</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="inactiveBorderWidthLabel">
+        <property name="text"><string>Borde inactivo:</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="kcfg_inactiveBorderWidth">
+        <property name="minimum"><number>0</number></property>
+        <property name="maximum"><number>12</number></property>
+        <property name="suffix"><string> px</string></property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="inactiveBorderOpacityLabel">
+        <property name="text"><string>Opacidad inactiva:</string></property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="kcfg_inactiveBorderOpacity">
+        <property name="decimals"><number>2</number></property>
+        <property name="minimum"><double>0.000000000000000</double></property>
+        <property name="maximum"><double>1.000000000000000</double></property>
+        <property name="singleStep"><double>0.050000000000000</double></property>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <widget class="QLabel" name="appearanceHelp">
+        <property name="wordWrap"><bool>true</bool></property>
+        <property name="text"><string>El borde activo usa el color Highlight del esquema KDE actual. El inactivo usa el color de texto atenuado. Los cambios requieren reaplicar la decoración.</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="behaviorGroup">
      <property name="title"><string>Comportamiento</string></property>
      <layout class="QFormLayout" name="behaviorLayout">
