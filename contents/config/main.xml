@@ -26,7 +26,12 @@
 
     <entry name="enableDragReassign" type="Bool"><default>true</default></entry>
     <entry name="showDragHighlight" type="Bool"><default>true</default></entry>
+    <entry name="showZoneOverlay" type="Bool"><default>true</default></entry>
     <entry name="dropZoneRatio" type="Double"><default>0.30</default></entry>
+    <entry name="zoneOverlayActiveOpacity" type="Double"><default>0.30</default></entry>
+    <entry name="zoneOverlayInactiveOpacity" type="Double"><default>0.10</default></entry>
+    <entry name="zoneOverlayCornerRadius" type="Int"><default>12</default></entry>
+    <entry name="zoneOverlayGap" type="Int"><default>8</default></entry>
 
     <entry name="floatingApps" type="String"><default></default></entry>
     <entry name="ignoredApps" type="String"><default></default></entry>

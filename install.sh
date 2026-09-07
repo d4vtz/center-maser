@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ID="org.d4vtz.centermaster"
+OVERLAY_ID="org.d4vtz.centermaster.overlay"
+OVERLAY_ROOT="$ROOT/overlay"
 ROOT="$(cd -- "$(dirname -- "$BASH_SOURCE")" && pwd)"
 DEST="$HOME/.local/share/kwin/scripts/$ID"
 
@@ -64,6 +66,28 @@ find_aurorae_theme_dir() {
     done
 
     return 1
+}
+
+install_center_master_overlay() {
+    local enabled drop_ratio active_opacity inactive_opacity corner_radius zone_gap
+
+    enabled="$(read_script_config showZoneOverlay true)"
+    drop_ratio="$(read_script_config dropZoneRatio 0.30)"
+    active_opacity="$(read_script_config zoneOverlayActiveOpacity 0.30)"
+    inactive_opacity="$(read_script_config zoneOverlayInactiveOpacity 0.10)"
+    corner_radius="$(read_script_config zoneOverlayCornerRadius 12)"
+    zone_gap="$(read_script_config zoneOverlayGap 8)"
+
+    kpackagetool6 --type=KWin/Script -u "$OVERLAY_ID" >/dev/null 2>&1 || true
+    kpackagetool6 --type=KWin/Script -i "$OVERLAY_ROOT"
+
+    kwriteconfig6 --file kwinrc --group "Script-$OVERLAY_ID" --key enabled "$enabled"
+    kwriteconfig6 --file kwinrc --group "Script-$OVERLAY_ID" --key dropZoneRatio "$drop_ratio"
+    kwriteconfig6 --file kwinrc --group "Script-$OVERLAY_ID" --key activeOpacity "$active_opacity"
+    kwriteconfig6 --file kwinrc --group "Script-$OVERLAY_ID" --key inactiveOpacity "$inactive_opacity"
+    kwriteconfig6 --file kwinrc --group "Script-$OVERLAY_ID" --key cornerRadius "$corner_radius"
+    kwriteconfig6 --file kwinrc --group "Script-$OVERLAY_ID" --key zoneGap "$zone_gap"
+    kwriteconfig6 --file kwinrc --group Plugins --key "$OVERLAY_ID""Enabled" true
 }
 
 install_center_master_script() {
@@ -170,6 +194,7 @@ install_accent_decoration() {
 }
 
 install_center_master_script
+install_center_master_overlay
 install_accent_decoration
 
 if command -v qdbus6 >/dev/null 2>&1; then
@@ -180,4 +205,4 @@ else
     echo "Advertencia: no se encontró qdbus6 ni qdbus; recarga KWin manualmente."
 fi
 
-echo "Center Master instalado y habilitado."
+echo "Center Master y su overlay de arrastre instalados y habilitados."
