@@ -394,11 +394,11 @@ Item {
                 radius: root.cornerRadius
                 color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "left" ? root.activeOpacity : Math.min(root.inactiveOpacity, 0.045))
+                    root.activeZone === "left" ? 0.065 : 0.018)
                 border.color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "left" ? 1.0 : 0.24)
-                border.width: root.activeZone === "left" ? 3 : 1
+                    root.activeZone === "left" ? 0.72 : 0.16)
+                border.width: root.activeZone === "left" ? 2 : 1
 
                 Behavior on color { ColorAnimation { duration: 110 } }
 
@@ -414,10 +414,10 @@ Item {
                     y: Math.max(6, Math.min(
                         parent.height - height - 6,
                         root.insertionY - root.workArea.y - height / 2))
-                    height: 8
-                    radius: 4
+                    height: 4
+                    radius: 2
                     color: Kirigami.Theme.highlightColor
-                    border.color: root.alphaColor(Kirigami.Theme.highlightedTextColor, 0.85)
+                    border.color: root.alphaColor(Kirigami.Theme.highlightedTextColor, 0.55)
                     border.width: 1
                 }
             }
@@ -432,11 +432,11 @@ Item {
                 radius: root.cornerRadius
                 color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "master" ? root.activeOpacity : Math.min(root.inactiveOpacity, 0.045))
+                    root.activeZone === "master" ? 0.065 : 0.018)
                 border.color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "master" ? 1.0 : 0.24)
-                border.width: root.activeZone === "master" ? 3 : 1
+                    root.activeZone === "master" ? 0.72 : 0.16)
+                border.width: root.activeZone === "master" ? 2 : 1
 
                 Behavior on color { ColorAnimation { duration: 110 } }
             }
@@ -451,11 +451,11 @@ Item {
                 radius: root.cornerRadius
                 color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "right" ? root.activeOpacity : Math.min(root.inactiveOpacity, 0.045))
+                    root.activeZone === "right" ? 0.065 : 0.018)
                 border.color: root.alphaColor(
                     Kirigami.Theme.highlightColor,
-                    root.activeZone === "right" ? 1.0 : 0.24)
-                border.width: root.activeZone === "right" ? 3 : 1
+                    root.activeZone === "right" ? 0.72 : 0.16)
+                border.width: root.activeZone === "right" ? 2 : 1
 
                 Behavior on color { ColorAnimation { duration: 110 } }
 
@@ -471,10 +471,10 @@ Item {
                     y: Math.max(6, Math.min(
                         parent.height - height - 6,
                         root.insertionY - root.workArea.y - height / 2))
-                    height: 8
-                    radius: 4
+                    height: 4
+                    radius: 2
                     color: Kirigami.Theme.highlightColor
-                    border.color: root.alphaColor(Kirigami.Theme.highlightedTextColor, 0.85)
+                    border.color: root.alphaColor(Kirigami.Theme.highlightedTextColor, 0.55)
                     border.width: 1
                 }
             }
@@ -487,7 +487,7 @@ Item {
                 width: visible ? Math.max(1, root.previewRect.width) : 1
                 height: visible ? Math.max(1, root.previewRect.height) : 1
                 radius: Math.max(6, root.cornerRadius - 2)
-                color: root.alphaColor(Kirigami.Theme.highlightColor, 0.18)
+                color: root.alphaColor(Kirigami.Theme.highlightColor, 0.13)
                 border.color: Kirigami.Theme.highlightColor
                 border.width: 3
 
@@ -499,21 +499,21 @@ Item {
 
             Rectangle {
                 id: hintCard
-                width: Math.min(260, parent.width * 0.27)
-                height: 116
+                width: Math.min(310, parent.width * 0.31)
+                height: 142
                 anchors.centerIn: parent
                 radius: 14
                 color: root.alphaColor(Kirigami.Theme.backgroundColor, 0.92)
-                border.color: Kirigami.Theme.highlightColor
+                border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.78)
                 border.width: 2
 
                 Column {
                     anchors.centerIn: parent
-                    spacing: 8
+                    spacing: 10
 
                     Item {
-                        width: 118
-                        height: 52
+                        width: 162
+                        height: 76
                         anchors.horizontalCenter: parent.horizontalCenter
 
                         Rectangle {
@@ -535,13 +535,13 @@ Item {
                                 y: 4 + rectData.y * (parent.height - 8)
                                 width: Math.max(3, rectData.width * (parent.width - 8))
                                 height: Math.max(3, rectData.height * (parent.height - 8))
-                                radius: 3
+                                radius: 4
                                 color: rectData.dragged
-                                    ? root.alphaColor(Kirigami.Theme.highlightColor, 0.72)
-                                    : root.alphaColor(Kirigami.Theme.textColor, 0.16)
+                                    ? root.alphaColor(Kirigami.Theme.highlightColor, 0.68)
+                                    : root.alphaColor(Kirigami.Theme.textColor, 0.14)
                                 border.color: rectData.dragged
                                     ? Kirigami.Theme.highlightColor
-                                    : root.alphaColor(Kirigami.Theme.textColor, 0.30)
+                                    : root.alphaColor(Kirigami.Theme.textColor, 0.26)
                                 border.width: rectData.dragged ? 2 : 1
                             }
                         }
