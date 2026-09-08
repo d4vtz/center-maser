@@ -1302,53 +1302,98 @@ class Controller {
         });
     }
 
-    dragHighlightGeometry(zone, geometry, state, area) {
-        const inner = Config.innerGap;
-        const outer = Config.outerGap;
-        const base = {
-            x: area.x + outer,
-            y: area.y + outer,
-            width: Math.max(1, area.width - outer * 2),
-            height: Math.max(1, area.height - outer * 2)
+    cloneStateForPreview(state) {
+        const preview = new WorkspaceState(state.output, state.desktop);
+
+        preview.master = state.master;
+        preview.left = state.left.slice();
+        preview.right = state.right.slice();
+
+        preview.focused = state.focused;
+        preview.focusHistory = state.focusHistory.slice();
+        preview.nextSide = state.nextSide;
+
+        preview.dualMasterRatio = state.dualMasterRatio;
+        preview.centerMasterRatio = state.centerMasterRatio;
+        preview.monocle = false;
+
+        for (const window of preview.left.concat(preview.right)) {
+            preview.setWeight(window, state.weightOf(window));
+        }
+
+        return preview;
+    }
+
+    simulatedDropLayout(state, window, zone, index, area) {
+        if (!state || !window || zone === "invalid") {
+            return null;
+        }
+
+        const preview = this.cloneStateForPreview(state);
+        preview.moveToZone(window, zone, index);
+        preview.validate();
+
+        const layout = calculateLayout(preview, area);
+        const dragged = layout.find(item => item.window === window);
+
+        if (!dragged) {
+            return null;
+        }
+
+        return {
+            previewState: preview,
+            layout: layout,
+            draggedRect: dragged.rect
         };
+    }
 
-        const edge = clamp(Config.dropZoneRatio, 0.15, 0.45);
+    normalizedLayoutRects(layout, area, draggedWindow) {
+        return layout.map(item => ({
+            x: clamp(
+                (item.rect.x - area.x) / Math.max(1, area.width),
+                0,
+                1
+            ),
+            y: clamp(
+                (item.rect.y - area.y) / Math.max(1, area.height),
+                0,
+                1
+            ),
+            width: clamp(
+                item.rect.width / Math.max(1, area.width),
+                0,
+                1
+            ),
+            height: clamp(
+                item.rect.height / Math.max(1, area.height),
+                0,
+                1
+            ),
+            dragged: item.window === draggedWindow
+        }));
+    }
 
-        if (zone === "master") {
-            const leftWidth = base.width * edge;
-            const rightWidth = base.width * edge;
+    dragHighlightGeometry(zone, geometry, state, area) {
+        const stack = zone === "left"
+            ? state.left.filter(w => w !== geometry.__window)
+            : zone === "right"
+                ? state.right.filter(w => w !== geometry.__window)
+                : [];
 
-            return makeRect(
-                base.x + leftWidth + inner,
-                base.y,
-                Math.max(1, base.width - leftWidth - rightWidth - inner * 2),
-                base.height
-            );
-        }
-
-        const stack = zone === "left" ? state.left : state.right;
-        const filtered = stack.filter(w => w !== geometry.__window);
         const centerY = geometry.y + geometry.height / 2;
-        const index = this.stackIndexForDrop(filtered, centerY);
+        const index = (zone === "left" || zone === "right")
+            ? this.stackIndexForDrop(stack, centerY)
+            : 0;
 
-        const zoneWidth = Math.max(1, base.width * edge - inner);
-        const x = zone === "left"
-            ? base.x
-            : base.x + base.width - zoneWidth;
-
-        if (!filtered.length) {
-            return makeRect(x, base.y, zoneWidth, base.height);
-        }
-
-        const insertionY = this.insertionYForStack(filtered, index, base);
-        const markerHeight = Math.max(4, Math.min(10, inner || 6));
-
-        return makeRect(
-            x,
-            insertionY - markerHeight / 2,
-            zoneWidth,
-            markerHeight
+        const simulated = this.simulatedDropLayout(
+            state,
+            geometry.__window,
+            zone,
+            index,
+            area
         );
+
+        return simulated ? simulated.draggedRect : null;
     }
 
     updateDragHighlight(window, geometry) {
@@ -1392,6 +1437,11 @@ class Controller {
             state,
             area
         );
+
+        if (!highlight) {
+            this.hideDragHighlight();
+            return;
+        }
 
         try {
             workspace.showOutline(highlight);
@@ -1490,6 +1540,21 @@ class Controller {
             insertionY = this.insertionYForStack(right, index, area);
         }
 
+        const simulated = zone !== "invalid"
+            ? this.simulatedDropLayout(
+                state,
+                window,
+                zone,
+                index < 0 ? 0 : index,
+                area
+            )
+            : null;
+
+        const previewRect = simulated ? simulated.draggedRect : null;
+        const resultRects = simulated
+            ? this.normalizedLayoutRects(simulated.layout, area, window)
+            : [];
+
         return {
             zone: zone,
             rawZone: resolved.rawZone,
@@ -1500,6 +1565,8 @@ class Controller {
             rightCount: right.length,
             leftRects: this.normalizedStackRects(left, area),
             rightRects: this.normalizedStackRects(right, area),
+            previewRect: previewRect,
+            resultRects: resultRects,
             workArea: {
                 x: area.x,
                 y: area.y,
