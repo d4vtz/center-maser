@@ -1258,6 +1258,50 @@ class Controller {
         return "master";
     }
 
+    allowedDropZones(state, window) {
+        const slot = state ? state.zoneOf(window) : null;
+        const onlyMaster =
+            state &&
+            state.tiledCount() === 2 &&
+            slot &&
+            slot.zone !== "master";
+
+        return {
+            left: !onlyMaster,
+            master: true,
+            right: !onlyMaster
+        };
+    }
+
+    resolvedDropZone(state, window, geometry, area) {
+        const rawZone = this.dropZoneForGeometry(geometry, area);
+        const allowed = this.allowedDropZones(state, window);
+
+        return {
+            rawZone: rawZone,
+            zone: allowed[rawZone] ? rawZone : "invalid",
+            allowed: allowed
+        };
+    }
+
+    normalizedStackRects(stack, area) {
+        return stack.map(window => {
+            const geometry = window.frameGeometry;
+            return {
+                y: clamp(
+                    (geometry.y - area.y) / Math.max(1, area.height),
+                    0,
+                    1
+                ),
+                height: clamp(
+                    geometry.height / Math.max(1, area.height),
+                    0,
+                    1
+                )
+            };
+        });
+    }
+
     dragHighlightGeometry(zone, geometry, state, area) {
         const inner = Config.innerGap;
         const outer = Config.outerGap;
@@ -1326,7 +1370,13 @@ class Controller {
             state.desktop
         );
 
-        const zone = this.dropZoneForGeometry(geometry, area);
+        const resolved = this.resolvedDropZone(state, window, geometry, area);
+        const zone = resolved.zone;
+
+        if (zone === "invalid") {
+            this.hideDragHighlight();
+            return;
+        }
 
         const geometryWithWindow = {
             x: geometry.x,
@@ -1423,7 +1473,8 @@ class Controller {
 
         const geometry = window.frameGeometry;
         const centerY = geometry.y + geometry.height / 2;
-        const zone = this.dropZoneForGeometry(geometry, area);
+        const resolved = this.resolvedDropZone(state, window, geometry, area);
+        const zone = resolved.zone;
 
         const left = state.left.filter(w => w !== window);
         const right = state.right.filter(w => w !== window);
@@ -1441,10 +1492,14 @@ class Controller {
 
         return {
             zone: zone,
+            rawZone: resolved.rawZone,
+            allowed: resolved.allowed,
             index: index,
             insertionY: insertionY,
             leftCount: left.length,
             rightCount: right.length,
+            leftRects: this.normalizedStackRects(left, area),
+            rightRects: this.normalizedStackRects(right, area),
             workArea: {
                 x: area.x,
                 y: area.y,
@@ -1477,7 +1532,14 @@ class Controller {
         const geometry = window.frameGeometry;
 
         const centerY = geometry.y + geometry.height / 2;
-        const zone = this.dropZoneForGeometry(geometry, area);
+        const resolved = this.resolvedDropZone(state, window, geometry, area);
+        const zone = resolved.zone;
+
+        if (zone === "invalid") {
+            this.relayout(state);
+            workspace.activeWindow = window;
+            return;
+        }
 
         let index = 0;
 
