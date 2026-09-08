@@ -21,6 +21,8 @@ Item {
     property bool allowLeft: true
     property bool allowMaster: true
     property bool allowRight: true
+    property var previewRect: null
+    property var resultRects: []
 
     readonly property bool overlayEnabled: boolConfig("showZoneOverlay", true)
     readonly property real dropZoneRatio: Math.min(Math.max(KWin.readConfig("dropZoneRatio", 0.30), 0.15), 0.45)
@@ -116,6 +118,8 @@ Item {
             allowLeft = true
             allowMaster = true
             allowRight = true
+            previewRect = null
+            resultRects = []
             return
         }
 
@@ -133,6 +137,8 @@ Item {
             allowLeft = true
             allowMaster = true
             allowRight = true
+            previewRect = null
+            resultRects = []
             return
         }
 
@@ -146,6 +152,8 @@ Item {
         allowLeft = !preview.allowed || preview.allowed.left
         allowMaster = !preview.allowed || preview.allowed.master
         allowRight = !preview.allowed || preview.allowed.right
+        previewRect = preview.previewRect || null
+        resultRects = preview.resultRects || []
 
         if (preview.workArea) {
             workArea = Qt.rect(
@@ -185,6 +193,8 @@ Item {
             root.allowLeft = true
             root.allowMaster = true
             root.allowRight = true
+            root.previewRect = null
+            root.resultRects = []
             root.dragWindow = null
             overlay.visible = false
         })
@@ -470,9 +480,27 @@ Item {
             }
 
             Rectangle {
+                id: exactDropPreview
+                visible: root.previewRect !== null && root.activeZone !== "invalid"
+                x: visible ? root.previewRect.x - root.workArea.x : 0
+                y: visible ? root.previewRect.y - root.workArea.y : 0
+                width: visible ? Math.max(1, root.previewRect.width) : 1
+                height: visible ? Math.max(1, root.previewRect.height) : 1
+                radius: Math.max(6, root.cornerRadius - 2)
+                color: root.alphaColor(Kirigami.Theme.highlightColor, 0.18)
+                border.color: Kirigami.Theme.highlightColor
+                border.width: 3
+
+                Behavior on x { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+                Behavior on y { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+                Behavior on width { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+                Behavior on height { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+            }
+
+            Rectangle {
                 id: hintCard
-                width: (!root.allowLeft && root.allowMaster && !root.allowRight) ? 240 : Math.min(280, parent.width * 0.28)
-                height: 104
+                width: Math.min(260, parent.width * 0.27)
+                height: 116
                 anchors.centerIn: parent
                 radius: 14
                 color: root.alphaColor(Kirigami.Theme.backgroundColor, 0.92)
@@ -483,125 +511,47 @@ Item {
                     anchors.centerIn: parent
                     spacing: 8
 
-                    Row {
-                        spacing: 6
-                        height: 44
+                    Item {
+                        width: 118
+                        height: 52
                         anchors.horizontalCenter: parent.horizontalCenter
 
-                        Item {
-                            visible: root.allowLeft
-                            width: visible ? 30 : 0
-                            height: parent.height
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 5
-                                color: root.alphaColor(
-                                    Kirigami.Theme.highlightColor,
-                                    root.activeZone === "left" ? 0.24 : 0.08)
-                                border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.75)
-                                border.width: root.activeZone === "left" ? 2 : 1
-                            }
-
-                            Repeater {
-                                model: root.leftRects
-                                Rectangle {
-                                    required property int index
-                                    readonly property var rectData: root.leftRects[index]
-                                    x: 4
-                                    width: parent.width - 8
-                                    y: 4 + rectData.y * (parent.height - 8)
-                                    height: Math.max(2, rectData.height * (parent.height - 8) - 2)
-                                    radius: 2
-                                    color: root.alphaColor(Kirigami.Theme.textColor, 0.18)
-                                }
-                            }
-
-                            Repeater {
-                                model: root.leftWindowCount + 1
-                                Rectangle {
-                                    required property int index
-                                    x: 3
-                                    width: parent.width - 6
-                                    height: root.activeZone === "left" && root.activeSlot === index ? 3 : 1
-                                    readonly property real markerY: {
-                                        if (root.leftWindowCount === 0) return parent.height / 2
-                                        if (index <= 0) return 2
-                                        if (index >= root.leftWindowCount) return parent.height - 2
-                                        var prev = root.leftRects[index - 1]
-                                        var next = root.leftRects[index]
-                                        return 4 + ((prev.y + prev.height + next.y) / 2) * (parent.height - 8)
-                                    }
-                                    y: Math.max(0, Math.min(parent.height - height, markerY - height / 2))
-                                    color: root.activeZone === "left" && root.activeSlot === index
-                                        ? Kirigami.Theme.highlightColor
-                                        : root.alphaColor(Kirigami.Theme.highlightColor, 0.35)
-                                }
-                            }
-                        }
-
                         Rectangle {
-                            visible: root.allowMaster
-                            width: visible ? 36 : 0
-                            height: parent.height
-                            radius: 5
-                            color: root.alphaColor(
-                                Kirigami.Theme.highlightColor,
-                                root.activeZone === "master" ? 0.72 : 0.10)
-                            border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.9)
-                            border.width: root.activeZone === "master" ? 2 : 1
+                            anchors.fill: parent
+                            radius: 6
+                            color: root.alphaColor(Kirigami.Theme.backgroundColor, 0.30)
+                            border.color: root.alphaColor(Kirigami.Theme.textColor, 0.22)
+                            border.width: 1
                         }
 
-                        Item {
-                            visible: root.allowRight
-                            width: visible ? 30 : 0
-                            height: parent.height
+                        Repeater {
+                            model: root.resultRects
 
                             Rectangle {
-                                anchors.fill: parent
-                                radius: 5
-                                color: root.alphaColor(
-                                    Kirigami.Theme.highlightColor,
-                                    root.activeZone === "right" ? 0.24 : 0.08)
-                                border.color: root.alphaColor(Kirigami.Theme.highlightColor, 0.75)
-                                border.width: root.activeZone === "right" ? 2 : 1
-                            }
+                                required property int index
+                                readonly property var rectData: root.resultRects[index]
 
-                            Repeater {
-                                model: root.rightRects
-                                Rectangle {
-                                    required property int index
-                                    readonly property var rectData: root.rightRects[index]
-                                    x: 4
-                                    width: parent.width - 8
-                                    y: 4 + rectData.y * (parent.height - 8)
-                                    height: Math.max(2, rectData.height * (parent.height - 8) - 2)
-                                    radius: 2
-                                    color: root.alphaColor(Kirigami.Theme.textColor, 0.18)
-                                }
+                                x: 4 + rectData.x * (parent.width - 8)
+                                y: 4 + rectData.y * (parent.height - 8)
+                                width: Math.max(3, rectData.width * (parent.width - 8))
+                                height: Math.max(3, rectData.height * (parent.height - 8))
+                                radius: 3
+                                color: rectData.dragged
+                                    ? root.alphaColor(Kirigami.Theme.highlightColor, 0.72)
+                                    : root.alphaColor(Kirigami.Theme.textColor, 0.16)
+                                border.color: rectData.dragged
+                                    ? Kirigami.Theme.highlightColor
+                                    : root.alphaColor(Kirigami.Theme.textColor, 0.30)
+                                border.width: rectData.dragged ? 2 : 1
                             }
+                        }
 
-                            Repeater {
-                                model: root.rightWindowCount + 1
-                                Rectangle {
-                                    required property int index
-                                    x: 3
-                                    width: parent.width - 6
-                                    height: root.activeZone === "right" && root.activeSlot === index ? 3 : 1
-                                    readonly property real markerY: {
-                                        if (root.rightWindowCount === 0) return parent.height / 2
-                                        if (index <= 0) return 2
-                                        if (index >= root.rightWindowCount) return parent.height - 2
-                                        var prev = root.rightRects[index - 1]
-                                        var next = root.rightRects[index]
-                                        return 4 + ((prev.y + prev.height + next.y) / 2) * (parent.height - 8)
-                                    }
-                                    y: Math.max(0, Math.min(parent.height - height, markerY - height / 2))
-                                    color: root.activeZone === "right" && root.activeSlot === index
-                                        ? Kirigami.Theme.highlightColor
-                                        : root.alphaColor(Kirigami.Theme.highlightColor, 0.35)
-                                }
-                            }
+                        Text {
+                            visible: root.resultRects.length === 0
+                            anchors.centerIn: parent
+                            text: "—"
+                            color: root.alphaColor(Kirigami.Theme.textColor, 0.55)
+                            font.pixelSize: 18
                         }
                     }
 
