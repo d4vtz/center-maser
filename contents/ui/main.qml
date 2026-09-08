@@ -16,6 +16,11 @@ Item {
     property int activeSlot: -1
     property real insertionY: -1
     property var previewData: null
+    property var leftRects: []
+    property var rightRects: []
+    property bool allowLeft: true
+    property bool allowMaster: true
+    property bool allowRight: true
 
     readonly property bool overlayEnabled: boolConfig("showZoneOverlay", true)
     readonly property real dropZoneRatio: Math.min(Math.max(KWin.readConfig("dropZoneRatio", 0.30), 0.15), 0.45)
@@ -106,6 +111,11 @@ Item {
             insertionY = -1
             leftWindowCount = 0
             rightWindowCount = 0
+            leftRects = []
+            rightRects = []
+            allowLeft = true
+            allowMaster = true
+            allowRight = true
             return
         }
 
@@ -118,6 +128,11 @@ Item {
             insertionY = -1
             leftWindowCount = 0
             rightWindowCount = 0
+            leftRects = []
+            rightRects = []
+            allowLeft = true
+            allowMaster = true
+            allowRight = true
             return
         }
 
@@ -126,6 +141,11 @@ Item {
         insertionY = preview.insertionY
         leftWindowCount = preview.leftCount
         rightWindowCount = preview.rightCount
+        leftRects = preview.leftRects || []
+        rightRects = preview.rightRects || []
+        allowLeft = !preview.allowed || preview.allowed.left
+        allowMaster = !preview.allowed || preview.allowed.master
+        allowRight = !preview.allowed || preview.allowed.right
 
         if (preview.workArea) {
             workArea = Qt.rect(
@@ -160,6 +180,11 @@ Item {
             root.activeSlot = -1
             root.insertionY = -1
             root.previewData = null
+            root.leftRects = []
+            root.rightRects = []
+            root.allowLeft = true
+            root.allowMaster = true
+            root.allowRight = true
             root.dragWindow = null
             overlay.visible = false
         })
@@ -174,7 +199,8 @@ Item {
     function zoneMessage() {
         if (activeZone === "left") return "Soltar en columna izquierda"
         if (activeZone === "right") return "Soltar en columna derecha"
-        return "Soltar como ventana principal"
+        if (activeZone === "master") return "Soltar como ventana principal"
+        return "Destino no disponible"
     }
 
     Component.onCompleted: {
@@ -349,6 +375,7 @@ Item {
 
             Rectangle {
                 id: leftZone
+                opacity: root.allowLeft ? 1.0 : 0.22
                 x: root.zoneGap
                 y: root.zoneGap
                 width: Math.max(1, parent.width * root.dropZoneRatio - root.zoneGap * 1.5)
@@ -386,6 +413,7 @@ Item {
 
             Rectangle {
                 id: masterZone
+                opacity: root.allowMaster ? 1.0 : 0.22
                 x: parent.width * root.dropZoneRatio + root.zoneGap / 2
                 y: root.zoneGap
                 width: Math.max(1, parent.width * (1.0 - root.dropZoneRatio * 2.0) - root.zoneGap)
@@ -404,6 +432,7 @@ Item {
 
             Rectangle {
                 id: rightZone
+                opacity: root.allowRight ? 1.0 : 0.22
                 x: parent.width * (1.0 - root.dropZoneRatio) + root.zoneGap / 2
                 y: root.zoneGap
                 width: Math.max(1, parent.width * root.dropZoneRatio - root.zoneGap * 1.5)
@@ -460,6 +489,7 @@ Item {
 
                         Item {
                             x: 0
+                            opacity: root.allowLeft ? 1.0 : 0.20
                             y: 0
                             width: 30
                             height: parent.height
@@ -475,31 +505,35 @@ Item {
                             }
 
                             Repeater {
-                                model: Math.max(1, root.leftWindowCount)
+                                model: root.leftRects
                                 Rectangle {
                                     required property int index
+                                    readonly property var rectData: root.leftRects[index]
                                     x: 4
                                     width: parent.width - 8
-                                    readonly property int count: Math.max(1, root.leftWindowCount)
-                                    y: 4 + index * ((parent.height - 8) / count)
-                                    height: Math.max(2, (parent.height - 8) / count - 2)
+                                    y: 4 + rectData.y * (parent.height - 8)
+                                    height: Math.max(2, rectData.height * (parent.height - 8) - 2)
                                     radius: 2
                                     color: root.alphaColor(Kirigami.Theme.textColor, 0.18)
                                 }
                             }
 
                             Repeater {
-                                model: root.leftWindowCount + 1
+                                model: root.allowLeft ? root.leftWindowCount + 1 : 0
                                 Rectangle {
                                     required property int index
-                                    visible: root.leftWindowCount > 0
                                     x: 3
                                     width: parent.width - 6
                                     height: root.activeZone === "left" && root.activeSlot === index ? 3 : 1
-                                    y: root.leftWindowCount > 0
-                                        ? Math.min(parent.height - height,
-                                            index * (parent.height / root.leftWindowCount))
-                                        : parent.height / 2
+                                    readonly property real markerY: {
+                                        if (root.leftWindowCount === 0) return parent.height / 2
+                                        if (index <= 0) return 2
+                                        if (index >= root.leftWindowCount) return parent.height - 2
+                                        var prev = root.leftRects[index - 1]
+                                        var next = root.leftRects[index]
+                                        return 4 + ((prev.y + prev.height + next.y) / 2) * (parent.height - 8)
+                                    }
+                                    y: Math.max(0, Math.min(parent.height - height, markerY - height / 2))
                                     color: root.activeZone === "left" && root.activeSlot === index
                                         ? Kirigami.Theme.highlightColor
                                         : root.alphaColor(Kirigami.Theme.highlightColor, 0.35)
@@ -522,6 +556,7 @@ Item {
 
                         Item {
                             x: 78
+                            opacity: root.allowRight ? 1.0 : 0.20
                             y: 0
                             width: 30
                             height: parent.height
@@ -537,31 +572,35 @@ Item {
                             }
 
                             Repeater {
-                                model: Math.max(1, root.rightWindowCount)
+                                model: root.rightRects
                                 Rectangle {
                                     required property int index
+                                    readonly property var rectData: root.rightRects[index]
                                     x: 4
                                     width: parent.width - 8
-                                    readonly property int count: Math.max(1, root.rightWindowCount)
-                                    y: 4 + index * ((parent.height - 8) / count)
-                                    height: Math.max(2, (parent.height - 8) / count - 2)
+                                    y: 4 + rectData.y * (parent.height - 8)
+                                    height: Math.max(2, rectData.height * (parent.height - 8) - 2)
                                     radius: 2
                                     color: root.alphaColor(Kirigami.Theme.textColor, 0.18)
                                 }
                             }
 
                             Repeater {
-                                model: root.rightWindowCount + 1
+                                model: root.allowRight ? root.rightWindowCount + 1 : 0
                                 Rectangle {
                                     required property int index
-                                    visible: root.rightWindowCount > 0
                                     x: 3
                                     width: parent.width - 6
                                     height: root.activeZone === "right" && root.activeSlot === index ? 3 : 1
-                                    y: root.rightWindowCount > 0
-                                        ? Math.min(parent.height - height,
-                                            index * (parent.height / root.rightWindowCount))
-                                        : parent.height / 2
+                                    readonly property real markerY: {
+                                        if (root.rightWindowCount === 0) return parent.height / 2
+                                        if (index <= 0) return 2
+                                        if (index >= root.rightWindowCount) return parent.height - 2
+                                        var prev = root.rightRects[index - 1]
+                                        var next = root.rightRects[index]
+                                        return 4 + ((prev.y + prev.height + next.y) / 2) * (parent.height - 8)
+                                    }
+                                    y: Math.max(0, Math.min(parent.height - height, markerY - height / 2))
                                     color: root.activeZone === "right" && root.activeSlot === index
                                         ? Kirigami.Theme.highlightColor
                                         : root.alphaColor(Kirigami.Theme.highlightColor, 0.35)
