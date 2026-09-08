@@ -200,6 +200,7 @@ Item {
         if (activeZone === "left") return "Soltar en columna izquierda"
         if (activeZone === "right") return "Soltar en columna derecha"
         if (activeZone === "master") return "Soltar como ventana principal"
+        if (!allowLeft && allowMaster && !allowRight) return "Mueve al centro para intercambiar con la principal"
         return "Destino no disponible"
     }
 
@@ -375,7 +376,7 @@ Item {
 
             Rectangle {
                 id: leftZone
-                opacity: root.allowLeft ? 1.0 : 0.22
+                visible: root.allowLeft
                 x: root.zoneGap
                 y: root.zoneGap
                 width: Math.max(1, parent.width * root.dropZoneRatio - root.zoneGap * 1.5)
@@ -413,7 +414,7 @@ Item {
 
             Rectangle {
                 id: masterZone
-                opacity: root.allowMaster ? 1.0 : 0.22
+                visible: root.allowMaster
                 x: parent.width * root.dropZoneRatio + root.zoneGap / 2
                 y: root.zoneGap
                 width: Math.max(1, parent.width * (1.0 - root.dropZoneRatio * 2.0) - root.zoneGap)
@@ -432,7 +433,7 @@ Item {
 
             Rectangle {
                 id: rightZone
-                opacity: root.allowRight ? 1.0 : 0.22
+                visible: root.allowRight
                 x: parent.width * (1.0 - root.dropZoneRatio) + root.zoneGap / 2
                 y: root.zoneGap
                 width: Math.max(1, parent.width * root.dropZoneRatio - root.zoneGap * 1.5)
@@ -470,7 +471,7 @@ Item {
 
             Rectangle {
                 id: hintCard
-                width: Math.min(280, parent.width * 0.28)
+                width: (!root.allowLeft && root.allowMaster && !root.allowRight) ? 240 : Math.min(280, parent.width * 0.28)
                 height: 104
                 anchors.centerIn: parent
                 radius: 14
@@ -482,16 +483,14 @@ Item {
                     anchors.centerIn: parent
                     spacing: 8
 
-                    Item {
-                        width: 108
+                    Row {
+                        spacing: 6
                         height: 44
                         anchors.horizontalCenter: parent.horizontalCenter
 
                         Item {
-                            x: 0
-                            opacity: root.allowLeft ? 1.0 : 0.20
-                            y: 0
-                            width: 30
+                            visible: root.allowLeft
+                            width: visible ? 30 : 0
                             height: parent.height
 
                             Rectangle {
@@ -519,7 +518,7 @@ Item {
                             }
 
                             Repeater {
-                                model: root.allowLeft ? root.leftWindowCount + 1 : 0
+                                model: root.leftWindowCount + 1
                                 Rectangle {
                                     required property int index
                                     x: 3
@@ -542,9 +541,8 @@ Item {
                         }
 
                         Rectangle {
-                            x: 36
-                            y: 0
-                            width: 36
+                            visible: root.allowMaster
+                            width: visible ? 36 : 0
                             height: parent.height
                             radius: 5
                             color: root.alphaColor(
@@ -555,10 +553,8 @@ Item {
                         }
 
                         Item {
-                            x: 78
-                            opacity: root.allowRight ? 1.0 : 0.20
-                            y: 0
-                            width: 30
+                            visible: root.allowRight
+                            width: visible ? 30 : 0
                             height: parent.height
 
                             Rectangle {
@@ -586,7 +582,7 @@ Item {
                             }
 
                             Repeater {
-                                model: root.allowRight ? root.rightWindowCount + 1 : 0
+                                model: root.rightWindowCount + 1
                                 Rectangle {
                                     required property int index
                                     x: 3
